@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import type { BusinessAnalysis, CostType, FixedItem, LineItem } from '../types';
 import {
   calcUnitEconomics,
@@ -46,11 +46,21 @@ import {
 export function Analyzer({
   analysis,
   onChange,
+  autoFocusName = false,
 }: {
   analysis: BusinessAnalysis;
   onChange: (patch: Partial<BusinessAnalysis> | ((a: BusinessAnalysis) => BusinessAnalysis)) => void;
+  autoFocusName?: boolean;
 }) {
   const ue = useMemo(() => calcUnitEconomics(analysis), [analysis]);
+  const nameRef = useRef<HTMLInputElement | null>(null);
+
+  useEffect(() => {
+    if (autoFocusName && nameRef.current) {
+      nameRef.current.focus();
+      nameRef.current.select();
+    }
+  }, [autoFocusName, analysis.id]);
 
   const addVariable = () =>
     onChange((a) => ({
@@ -89,12 +99,21 @@ export function Analyzer({
 
   return (
     <div className="space-y-6">
-      {/* Header */}
+      {/* Header with prominent business name */}
       <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-semibold">Analyzer</h1>
-          <p className="text-sm text-slate-500 dark:text-slate-400">
-            Enter your numbers. Everything updates live.
+        <div className="flex-1 min-w-0">
+          <label className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">
+            Business name
+          </label>
+          <input
+            ref={nameRef}
+            value={analysis.name}
+            onChange={(e) => onChange({ name: e.target.value })}
+            placeholder="Name this analysis…"
+            className="mt-1 w-full bg-transparent text-2xl font-semibold border-0 border-b border-transparent hover:border-slate-300 focus:border-indigo-500 dark:hover:border-slate-600 focus:outline-none px-0 py-1 transition"
+          />
+          <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+            Enter your numbers. Everything updates live — saved automatically.
           </p>
         </div>
         <div className="flex gap-2 no-print">
@@ -108,9 +127,6 @@ export function Analyzer({
       {/* Context */}
       <Card title="Business context">
         <div className="grid md:grid-cols-2 gap-4">
-          <Field label="Business name">
-            <TextInput value={analysis.name} onChange={(v) => onChange({ name: v })} />
-          </Field>
           <Field label="One-line description">
             <TextInput
               value={analysis.description}

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, useCallback } from 'react';
+import { useEffect, useMemo, useState, useCallback, useReducer } from 'react';
 import type { AppSettings, BusinessAnalysis, Section } from './types';
 import {
   defaultSettings,
@@ -29,12 +29,21 @@ const SECTIONS: { key: Section; label: string; icon: string }[] = [
   { key: 'settings', label: 'Settings', icon: '⚙️' },
 ];
 
+interface Toast {
+  id: number;
+  message: string;
+}
+
 export default function App() {
   const [settings, setSettings] = useState<AppSettings>(defaultSettings);
   const [analyses, setAnalyses] = useState<BusinessAnalysis[]>([]);
   const [section, setSection] = useState<Section>('analyzer');
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [loaded, setLoaded] = useState(false);
+  const [lastSaved, setLastSaved] = useState<number | null>(null);
+  const [toast, setToast] = useState<Toast | null>(null);
+  const [lastCreatedId, setLastCreatedId] = useState<string | null>(null);
+  const [, tick] = useReducer((x: number) => x + 1, 0);
 
   // Load from storage once on mount
   useEffect(() => {
@@ -45,13 +54,33 @@ export default function App() {
     setLoaded(true);
   }, []);
 
-  // Persist
+  // Persist + track last-saved for the topbar indicator
   useEffect(() => {
-    if (loaded) saveSettings(settings);
+    if (!loaded) return;
+    saveSettings(settings);
+    setLastSaved(Date.now());
   }, [settings, loaded]);
   useEffect(() => {
-    if (loaded) saveAnalyses(analyses);
+    if (!loaded) return;
+    saveAnalyses(analyses);
+    setLastSaved(Date.now());
   }, [analyses, loaded]);
+
+  // Tick once every 15s so the "Saved X ago" label re-renders
+  useEffect(() => {
+    const t = setInterval(() => tick(), 15000);
+    return () => clearInterval(t);
+  }, []);
+
+  // Multi-tab sync: reload when another tab writes to our storage keys
+  useEffect(() => {
+    const onStorage = (e: StorageEvent) => {
+      if (e.key === 'brc.analyses.v1') setAnalyses(loadAnalyses());
+      if (e.key === 'brc.settings.v1') setSettings(loadSettings());
+    };
+    window.addEventListener('storage', onStorage);
+    return () => window.removeEventListener('storage', onStorage);
+  }, []);
 
   // Dark mode
   useEffect(() => {
@@ -64,6 +93,10 @@ export default function App() {
     () => analyses.find((a) => a.id === settings.activeId) || null,
     [analyses, settings.activeId]
   );
+
+  const showToast = useCallback((message: string) => {
+    setToast({ id: Date.now(), message });
+  }, []);
 
   const updateActive = useCallback(
     (patch: Partial<BusinessAnalysis> | ((a: BusinessAnalysis) => BusinessAnalysis)) => {
@@ -84,17 +117,22 @@ export default function App() {
       const fresh = newAnalysis(name);
       setAnalyses((list) => [fresh, ...list]);
       setSettings((s) => ({ ...s, activeId: fresh.id }));
+      setLastCreatedId(fresh.id);
+      setSection('analyzer');
+      showToast(`Created "${fresh.name}" — rename it to get started.`);
       return fresh;
     },
-    []
+    [showToast]
   );
 
   const deleteAnalysis = useCallback(
     (id: string) => {
+      const source = analyses.find((a) => a.id === id);
       setAnalyses((list) => list.filter((a) => a.id !== id));
       setSettings((s) => (s.activeId === id ? { ...s, activeId: null } : s));
+      if (source) showToast(`Deleted "${source.name}".`);
     },
-    []
+    [analyses, showToast]
   );
 
   const duplicateAnalysis = useCallback(
@@ -111,8 +149,10 @@ export default function App() {
       };
       setAnalyses((list) => [copy, ...list]);
       setSettings((s) => ({ ...s, activeId: copy.id }));
+      setLastCreatedId(copy.id);
+      showToast(`Duplicated as "${copy.name}".`);
     },
-    [analyses]
+    [analyses, showToast]
   );
 
   if (!loaded) return null;
@@ -160,6 +200,8 @@ export default function App() {
     );
   }
 
+  const shouldAutoFocusName = !!(active && lastCreatedId === active.id);
+
   return (
     <div className="min-h-screen flex flex-col">
       {/* Top bar */}
@@ -174,9 +216,10 @@ export default function App() {
           </button>
           <div className="flex items-center gap-2">
             <span className="text-xl">🧮</span>
-            <span className="font-semibold">Business Reality Check</span>
+            <span className="font-semibold hidden sm:inline">Business Reality Check</span>
           </div>
           <div className="flex-1" />
+          <SavedIndicator lastSaved={lastSaved} />
           <BusinessSelector
             analyses={analyses}
             activeId={settings.activeId}
@@ -226,7 +269,11 @@ export default function App() {
         {/* Main */}
         <main className="flex-1 p-4 md:p-8 max-w-6xl mx-auto w-full">
           {section === 'analyzer' && active && (
-            <Analyzer analysis={active} onChange={updateActive} />
+            <Analyzer
+              analysis={active}
+              onChange={updateActive}
+              autoFocusName={shouldAutoFocusName}
+            />
           )}
           {section === 'stress' && active && (
             <StressTest analysis={active} />
@@ -249,6 +296,55 @@ export default function App() {
           )}
         </main>
       </div>
+
+      <ToastView toast={toast} onDismiss={() => setToast(null)} />
+    </div>
+  );
+}
+
+function SavedIndicator({ lastSaved }: { lastSaved: number | null }) {
+  if (!lastSaved) return null;
+  return (
+    <span
+      className="hidden sm:inline-flex items-center gap-1 text-xs text-slate-500 dark:text-slate-400 px-2 tabular-nums"
+      title={new Date(lastSaved).toLocaleString()}
+    >
+      <span className="inline-block w-1.5 h-1.5 rounded-full bg-healthy" />
+      Saved {relativeTime(lastSaved)}
+    </span>
+  );
+}
+
+function relativeTime(ts: number): string {
+  const diff = Math.max(0, Math.floor((Date.now() - ts) / 1000));
+  if (diff < 5) return 'just now';
+  if (diff < 60) return `${diff}s ago`;
+  const mins = Math.floor(diff / 60);
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  return new Date(ts).toLocaleDateString();
+}
+
+function ToastView({
+  toast,
+  onDismiss,
+}: {
+  toast: Toast | null;
+  onDismiss: () => void;
+}) {
+  useEffect(() => {
+    if (!toast) return;
+    const t = setTimeout(onDismiss, 3500);
+    return () => clearTimeout(t);
+  }, [toast?.id, onDismiss]);
+  if (!toast) return null;
+  return (
+    <div
+      key={toast.id}
+      className="fixed bottom-4 right-4 z-50 bg-slate-900 text-white px-4 py-2.5 rounded-lg shadow-lg text-sm max-w-xs no-print"
+    >
+      {toast.message}
     </div>
   );
 }
@@ -274,9 +370,9 @@ function BusinessSelector({
     <div className="relative">
       <button
         onClick={() => setOpen((o) => !o)}
-        className="flex items-center gap-2 px-3 py-1.5 rounded-md text-sm bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700"
+        className="flex items-center gap-2 px-3 py-1.5 rounded-md text-sm bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 max-w-[200px]"
       >
-        <span className="font-medium">{active?.name || 'No analysis'}</span>
+        <span className="font-medium truncate">{active?.name || 'No analysis'}</span>
         <span className="text-slate-400">▾</span>
       </button>
       {open && (

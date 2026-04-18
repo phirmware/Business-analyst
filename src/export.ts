@@ -1,5 +1,6 @@
 import type { BusinessAnalysis } from './types';
 import { calcUnitEconomics, formatGBP, formatPct, formatNum } from './calculations';
+import { DISTRIBUTION_STRATEGIES } from './constants';
 
 export function analysisToMarkdown(a: BusinessAnalysis): string {
   const ue = calcUnitEconomics(a);
@@ -10,6 +11,13 @@ export function analysisToMarkdown(a: BusinessAnalysis): string {
   const moats = a.scorecard.q2Moats.length
     ? a.scorecard.q2Moats.join(', ')
     : '(none selected)';
+  const strategyLabel = (key: string) =>
+    DISTRIBUTION_STRATEGIES.find((s) => s.key === key)?.label || '(none)';
+  const d = a.distribution;
+  const cacRatio =
+    d.estimatedCAC > 0 && ue.contributionPerUnit > 0
+      ? (d.estimatedCAC / ue.contributionPerUnit).toFixed(1) + '× contribution'
+      : '—';
   return `# Business Reality Check — ${a.name}
 
 _Exported ${new Date().toLocaleString()}_
@@ -52,7 +60,32 @@ ${fc || '(none)'}
 - **Q4 runway (months):** ${a.scorecard.q4Runway}
 - **Q4 regulatory risks:** ${a.scorecard.q4Regulatory || '—'}
 - **Q4 macro risks:** ${a.scorecard.q4Macro || '—'}
+- **Q5 notes:** ${a.scorecard.q5Notes || '—'}
+
+## Distribution
+- **Primary channel:** ${strategyLabel(d.primaryStrategyKey)}
+- **Secondary channel:** ${strategyLabel(d.secondaryStrategyKey)}
+- **Estimated CAC:** ${d.estimatedCAC > 0 ? '£' + d.estimatedCAC : '—'} (${cacRatio})
+- **Channel tested:** ${d.channelTested || '—'}
+- **Test result:** ${d.testResult || '—'}
+- **Notes:** ${d.notes || '—'}
+
+## Idea filter
+- **Problem statement:** ${a.ideaFilter.problemStatement || '—'}
+- **Acute / Frequent / Expensive:** ${yn(a.ideaFilter.problemAcute)} / ${yn(a.ideaFilter.problemFrequent)} / ${yn(a.ideaFilter.problemExpensive)}
+- **Annual cost to customer:** ${a.ideaFilter.problemAnnualCost > 0 ? '£' + a.ideaFilter.problemAnnualCost : '—'}
+- **Problem evidence:** ${a.ideaFilter.problemEvidence || '—'}
+- **Precedent paying / specific commitment:** ${yn(a.ideaFilter.wtpPrecedent)} / ${yn(a.ideaFilter.wtpCommitment)}
+- **Prospect-quoted price:** ${a.ideaFilter.wtpPrice > 0 ? '£' + a.ideaFilter.wtpPrice : '—'}
+- **WTP evidence:** ${a.ideaFilter.wtpEvidence || '—'}
+- **Can name channels / has list / tested outreach:** ${yn(a.ideaFilter.reachCanName)} / ${yn(a.ideaFilter.reachHaveList)} / ${yn(a.ideaFilter.reachTestedOutreach)}
+- **Channels:** ${a.ideaFilter.reachChannels || '—'}
+- **Reach evidence:** ${a.ideaFilter.reachEvidence || '—'}
 `;
+}
+
+function yn(v: string): string {
+  return v === '' ? '—' : v;
 }
 
 export function exportAnalysisMarkdown(a: BusinessAnalysis) {

@@ -10,8 +10,10 @@ import {
 } from './storage';
 import { newAnalysis } from './constants';
 import { Analyzer } from './sections/Analyzer';
+import { IdeaFilter } from './sections/IdeaFilter';
 import { StressTest } from './sections/StressTest';
 import { Scorecard } from './sections/Scorecard';
+import { Distribution } from './sections/Distribution';
 import { Library } from './sections/Library';
 import { AIAdvisor } from './sections/AIAdvisor';
 import { Compare } from './sections/Compare';
@@ -20,9 +22,11 @@ import { Onboarding } from './sections/Onboarding';
 import { Button } from './components/ui';
 
 const SECTIONS: { key: Section; label: string; icon: string }[] = [
+  { key: 'filter', label: 'Idea Filter', icon: '🧪' },
   { key: 'analyzer', label: 'Analyzer', icon: '📊' },
   { key: 'stress', label: 'Stress Test', icon: '🔥' },
   { key: 'scorecard', label: 'Scorecard', icon: '📝' },
+  { key: 'distribute', label: 'Distribution', icon: '📣' },
   { key: 'library', label: 'Learning Library', icon: '📚' },
   { key: 'ai', label: 'AI Advisor', icon: '🤖' },
   { key: 'compare', label: 'Compare', icon: '⚖️' },
@@ -268,6 +272,13 @@ export default function App() {
 
         {/* Main */}
         <main className="flex-1 p-4 md:p-8 max-w-6xl mx-auto w-full">
+          {section === 'filter' && active && (
+            <IdeaFilter
+              analysis={active}
+              onChange={updateActive}
+              onGoToAnalyzer={() => setSection('analyzer')}
+            />
+          )}
           {section === 'analyzer' && active && (
             <Analyzer
               analysis={active}
@@ -280,6 +291,9 @@ export default function App() {
           )}
           {section === 'scorecard' && active && (
             <Scorecard analysis={active} onChange={updateActive} />
+          )}
+          {section === 'distribute' && active && (
+            <Distribution analysis={active} onChange={updateActive} />
           )}
           {section === 'library' && <Library />}
           {section === 'ai' && active && (

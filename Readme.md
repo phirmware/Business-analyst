@@ -66,3 +66,10 @@ vercel --prod      # promote to production
 - Each visitor configures their own API key in the deployed app's Settings — it never leaves their browser.
 - No environment variables are required on Vercel.
 - There is no auth on the app itself. If you want to restrict access, put it behind Vercel Password Protection (Pro plan) or deploy it to a private URL.
+
+
+New Distribution Planner section — 📣 nav item between Scorecard and Library. Auto-ranks all 7 channels against the business's industry/pricing/price, highlights the top 2, lets the user pick a primary + secondary, estimates CAC with a health badge against contribution margin, logs what they've actually tested, and tracks per-channel starter checklists.
+Scorecard Q5 · Distribution Reality — Scorecard.tsx now has a 5th question auto-scored from the Distribution data (channel named, channel tested, CAC fits unit economics). Weights rebalanced: Q1/Q4/Q5 at 3, Q2/Q3 at 2. Verdict pills now show 5 across.
+Data persistence — storage.ts hydrates old analyses with empty distribution/q5Notes fields on load so refresh is safe.
+Exports + AI — export.ts and framework.ts now include the distribution plan, so the Markdown/PDF exports and the AI Advisor's business-context summary both see the channel picks, CAC, and what was tested.
+Test it: create or open an analysis → go to 📣 Distribution → pick channels, set CAC, log a test → then Scorecard will auto-show Q5 green/yellow/red.

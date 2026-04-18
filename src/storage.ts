@@ -1,4 +1,10 @@
-import type { AiProvider, AppSettings, BusinessAnalysis } from './types';
+import type {
+  AiProvider,
+  AppSettings,
+  BusinessAnalysis,
+  DistributionData,
+  IdeaFilterData,
+} from './types';
 
 const ANALYSES_KEY = 'brc.analyses.v1';
 const SETTINGS_KEY = 'brc.settings.v1';
@@ -38,12 +44,49 @@ export const defaultSettings: AppSettings = {
   activeId: null,
 };
 
+const DEFAULT_DISTRIBUTION: DistributionData = {
+  primaryStrategyKey: '',
+  secondaryStrategyKey: '',
+  estimatedCAC: 0,
+  channelTested: '',
+  testResult: '',
+  checklistProgress: {},
+  notes: '',
+};
+
+const DEFAULT_IDEA_FILTER: IdeaFilterData = {
+  problemStatement: '',
+  problemAcute: '',
+  problemFrequent: '',
+  problemExpensive: '',
+  problemAnnualCost: 0,
+  problemEvidence: '',
+  wtpPrecedent: '',
+  wtpCommitment: '',
+  wtpPrice: 0,
+  wtpEvidence: '',
+  reachCanName: '',
+  reachHaveList: '',
+  reachTestedOutreach: '',
+  reachChannels: '',
+  reachEvidence: '',
+};
+
+function hydrate(a: BusinessAnalysis): BusinessAnalysis {
+  return {
+    ...a,
+    distribution: { ...DEFAULT_DISTRIBUTION, ...(a.distribution ?? {}) },
+    ideaFilter: { ...DEFAULT_IDEA_FILTER, ...(a.ideaFilter ?? {}) },
+    scorecard: { ...a.scorecard, q5Notes: a.scorecard?.q5Notes ?? '' },
+  };
+}
+
 export function loadAnalyses(): BusinessAnalysis[] {
   try {
     const raw = localStorage.getItem(ANALYSES_KEY);
     if (!raw) return [];
     const list = JSON.parse(raw) as BusinessAnalysis[];
-    return Array.isArray(list) ? list : [];
+    return Array.isArray(list) ? list.map(hydrate) : [];
   } catch {
     return [];
   }

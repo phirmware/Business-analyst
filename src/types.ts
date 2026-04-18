@@ -24,6 +24,40 @@ export interface ScorecardAnswers {
   q4Runway: number;
   q4Regulatory: string;
   q4Macro: string;
+  q5Notes: string;
+}
+
+export interface DistributionData {
+  primaryStrategyKey: string;
+  secondaryStrategyKey: string;
+  estimatedCAC: number;
+  channelTested: string;
+  testResult: string;
+  checklistProgress: Record<string, string[]>;
+  notes: string;
+}
+
+export type YesNoUnsure = 'yes' | 'no' | 'unsure' | '';
+
+export interface IdeaFilterData {
+  // Filter 1 — problem severity (acute, frequent, expensive)
+  problemStatement: string;
+  problemAcute: YesNoUnsure;
+  problemFrequent: YesNoUnsure;
+  problemExpensive: YesNoUnsure;
+  problemAnnualCost: number;
+  problemEvidence: string;
+  // Filter 2 — willingness to pay
+  wtpPrecedent: YesNoUnsure;
+  wtpCommitment: YesNoUnsure;
+  wtpPrice: number;
+  wtpEvidence: string;
+  // Filter 3 — reachability
+  reachCanName: YesNoUnsure;
+  reachHaveList: YesNoUnsure;
+  reachTestedOutreach: YesNoUnsure;
+  reachChannels: string;
+  reachEvidence: string;
 }
 
 export interface ChatMessage {
@@ -50,6 +84,10 @@ export interface BusinessAnalysis {
   cashReserve: number;
   // Scorecard
   scorecard: ScorecardAnswers;
+  // Distribution
+  distribution: DistributionData;
+  // Idea filter (problem/WTP/reach gate before modelling)
+  ideaFilter: IdeaFilterData;
   // AI chat
   chat: ChatMessage[];
 }
@@ -66,4 +104,13 @@ export interface AppSettings {
   activeId: string | null;
 }
 
-export type Section = 'analyzer' | 'stress' | 'scorecard' | 'library' | 'ai' | 'compare' | 'settings';
+export type Section =
+  | 'filter'
+  | 'analyzer'
+  | 'stress'
+  | 'scorecard'
+  | 'distribute'
+  | 'library'
+  | 'ai'
+  | 'compare'
+  | 'settings';

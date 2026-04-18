@@ -6,9 +6,9 @@ import {
   formatPct,
   type Health,
 } from '../calculations';
-import { MOATS } from '../constants';
+import { DISTRIBUTION_STRATEGIES, MOATS } from '../constants';
+import { cacHealthForAnalysis } from './Distribution';
 import {
-  Button,
   Card,
   Field,
   HealthBadge,
@@ -17,7 +17,14 @@ import {
   TextInput,
 } from '../components/ui';
 
-type Score = { q1: Health; q2: Health; q3: Health; q4: Health; overall: Health };
+type Score = {
+  q1: Health;
+  q2: Health;
+  q3: Health;
+  q4: Health;
+  q5: Health;
+  overall: Health;
+};
 
 export function Scorecard({
   analysis,
@@ -54,7 +61,7 @@ export function Scorecard({
       <div>
         <h1 className="text-2xl font-semibold">Scorecard</h1>
         <p className="text-sm text-slate-500 dark:text-slate-400">
-          Four critical questions. Answer honestly. The model does the rest.
+          Five critical questions. Answer honestly. The model does the rest.
         </p>
       </div>
 
@@ -232,6 +239,79 @@ export function Scorecard({
           </Field>
         </div>
       </Card>
+
+      {/* Q5 */}
+      <Card
+        title="Q5 · Distribution reality"
+        right={<HealthBadge health={score.q5} label={healthLabel(score.q5)} />}
+      >
+        <p className="text-sm text-slate-600 dark:text-slate-300 mb-3">
+          Can you actually reach your customer, at a cost the unit economics can absorb? Great
+          products die in silence without a channel. Auto-scored from the Distribution
+          Planner.
+        </p>
+        <DistributionSubScores analysis={analysis} />
+        <div className="mt-4">
+          <Field label="Anything else about distribution worth noting?">
+            <TextInput
+              value={s.q5Notes}
+              onChange={(v) => update({ q5Notes: v })}
+              placeholder="Existing audience, unfair channel advantage, pending partnership…"
+            />
+          </Field>
+        </div>
+      </Card>
+    </div>
+  );
+}
+
+function DistributionSubScores({ analysis }: { analysis: BusinessAnalysis }) {
+  const ue = calcUnitEconomics(analysis);
+  const d = analysis.distribution;
+  const primary = DISTRIBUTION_STRATEGIES.find((s) => s.key === d.primaryStrategyKey);
+  const channelNamed = !!primary;
+  const channelTested = d.channelTested.trim().length >= 3 && d.testResult.trim().length >= 3;
+  const cacHealth = cacHealthForAnalysis(d.estimatedCAC, ue.contributionPerUnit);
+  const rows: { label: string; met: Health; detail: string }[] = [
+    {
+      label: 'Primary channel selected',
+      met: channelNamed ? 'healthy' : 'danger',
+      detail: primary ? `${primary.icon} ${primary.label}` : 'Not picked yet',
+    },
+    {
+      label: 'Tested a channel (not just planned)',
+      met: channelTested ? 'healthy' : 'caution',
+      detail: channelTested ? d.channelTested : 'No test logged',
+    },
+    {
+      label: 'CAC fits unit economics',
+      met: d.estimatedCAC <= 0 ? 'caution' : cacHealth,
+      detail:
+        d.estimatedCAC <= 0
+          ? 'No CAC estimate'
+          : ue.contributionPerUnit <= 0
+          ? 'Contribution ≤ 0 — CAC cannot be recovered'
+          : `CAC £${d.estimatedCAC.toFixed(0)} vs contribution ${formatGBP(
+              ue.contributionPerUnit
+            )}`,
+    },
+  ];
+  return (
+    <div className="grid md:grid-cols-3 gap-2">
+      {rows.map((r) => (
+        <div
+          key={r.label}
+          className="rounded-md border border-slate-200 dark:border-slate-800 p-2.5"
+        >
+          <div className="flex items-start justify-between gap-2">
+            <div className="text-xs font-medium">{r.label}</div>
+            <HealthBadge health={r.met} label={healthLabel(r.met)} />
+          </div>
+          <div className="text-xs text-slate-500 mt-1 truncate" title={r.detail}>
+            {r.detail}
+          </div>
+        </div>
+      ))}
     </div>
   );
 }
@@ -239,6 +319,7 @@ export function Scorecard({
 function computeScore(a: BusinessAnalysis): Score {
   const ue = calcUnitEconomics(a);
   const s = a.scorecard;
+  const d = a.distribution;
 
   // Q1: margin + validated
   let q1: Health;
@@ -267,22 +348,34 @@ function computeScore(a: BusinessAnalysis): Score {
   else if (s.q4Runway >= 6 || survives30) q4 = 'caution';
   else q4 = 'danger';
 
-  // Overall (weighted) — q1 and q4 carry more weight
+  // Q5: distribution reality (auto-scored from distribution data)
+  const channelNamed = !!d.primaryStrategyKey;
+  const channelTested =
+    d.channelTested.trim().length >= 3 && d.testResult.trim().length >= 3;
+  const cacHealth = cacHealthForAnalysis(d.estimatedCAC, ue.contributionPerUnit);
+  const cacOk = d.estimatedCAC > 0 && cacHealth === 'healthy';
+  let q5: Health;
+  if (channelNamed && channelTested && cacOk) q5 = 'healthy';
+  else if (!channelNamed || cacHealth === 'danger') q5 = 'danger';
+  else q5 = 'caution';
+
+  // Overall (weighted) — q1, q4, q5 carry more weight
   const scoreMap = { healthy: 2, caution: 1, danger: 0 } as const;
-  const weights = { q1: 3, q2: 2, q3: 2, q4: 3 };
+  const weights = { q1: 3, q2: 2, q3: 2, q4: 3, q5: 3 };
   const raw =
     scoreMap[q1] * weights.q1 +
     scoreMap[q2] * weights.q2 +
     scoreMap[q3] * weights.q3 +
-    scoreMap[q4] * weights.q4;
-  const max = 2 * (weights.q1 + weights.q2 + weights.q3 + weights.q4);
+    scoreMap[q4] * weights.q4 +
+    scoreMap[q5] * weights.q5;
+  const max = 2 * (weights.q1 + weights.q2 + weights.q3 + weights.q4 + weights.q5);
   const ratio = raw / max;
-  const anyDanger = [q1, q2, q3, q4].includes('danger');
+  const anyDanger = [q1, q2, q3, q4, q5].includes('danger');
   let overall: Health;
   if (anyDanger) overall = 'danger';
   else if (ratio >= 0.8) overall = 'healthy';
   else overall = 'caution';
-  return { q1, q2, q3, q4, overall };
+  return { q1, q2, q3, q4, q5, overall };
 }
 
 function healthLabel(h: Health): string {
@@ -325,6 +418,8 @@ function FinalVerdict({
   if (score.q3 === 'caution') issues.push('Pricing power is weak or uncertain. Find a reason customers pay more.');
   if (score.q4 === 'danger') issues.push('Downside kills you — insufficient runway, no survival path in a downturn.');
   if (score.q4 === 'caution') issues.push('Downside is survivable but tight. A single bad quarter could end the business.');
+  if (score.q5 === 'danger') issues.push('No plausible way to reach customers at a cost the margins can absorb.');
+  if (score.q5 === 'caution') issues.push('Distribution is vague or untested — you are guessing at CAC.');
 
   const recs: string[] = [];
   if (ue.contributionMarginPct < 20)
@@ -337,6 +432,15 @@ function FinalVerdict({
     recs.push('Differentiate or segment so you stop being a price-taker.');
   if (analysis.scorecard.q4Runway < 6)
     recs.push('Build to at least 6 months of runway before launching, 12 if unproven.');
+  if (!analysis.distribution.primaryStrategyKey)
+    recs.push('Pick a primary distribution channel and run one real test — plans do not count.');
+  else if (analysis.distribution.estimatedCAC > 0 && ue.contributionPerUnit > 0) {
+    const ratio = analysis.distribution.estimatedCAC / ue.contributionPerUnit;
+    if (ratio > 8)
+      recs.push(
+        `CAC is ${ratio.toFixed(1)}× contribution per unit — either push contribution up, CAC down, or pick a cheaper channel.`
+      );
+  }
 
   return (
     <Card>
@@ -347,11 +451,12 @@ function FinalVerdict({
           <p className="text-sm text-slate-600 dark:text-slate-300 mt-1">{vr.body}</p>
         </div>
       </div>
-      <div className="grid md:grid-cols-4 gap-2 mt-4">
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-2 mt-4">
         <ScorePill label="Q1 Unit econ" health={score.q1} />
         <ScorePill label="Q2 Moat" health={score.q2} />
         <ScorePill label="Q3 Pricing" health={score.q3} />
         <ScorePill label="Q4 Downside" health={score.q4} />
+        <ScorePill label="Q5 Distribution" health={score.q5} />
       </div>
       {(issues.length > 0 || recs.length > 0) && (
         <div className="grid md:grid-cols-2 gap-4 mt-4">

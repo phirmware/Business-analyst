@@ -1,4 +1,11 @@
-import type { BusinessAnalysis, LineItem, FixedItem, ScorecardAnswers } from './types';
+import type {
+  BusinessAnalysis,
+  DistributionData,
+  FixedItem,
+  IdeaFilterData,
+  LineItem,
+  ScorecardAnswers,
+} from './types';
 import { uid } from './storage';
 
 export const INDUSTRIES = [
@@ -108,6 +115,252 @@ export function defaultScorecard(): ScorecardAnswers {
     q4Runway: 0,
     q4Regulatory: '',
     q4Macro: '',
+    q5Notes: '',
+  };
+}
+
+export interface DistributionStrategy {
+  key: string;
+  label: string;
+  icon: string;
+  tagline: string;
+  whenItWorks: string;
+  whenItFails: string;
+  industries: string[];
+  pricingModels: string[];
+  minPrice: number;
+  maxPrice: number;
+  checklist: { id: string; label: string }[];
+}
+
+export const DISTRIBUTION_STRATEGIES: DistributionStrategy[] = [
+  {
+    key: 'content-seo',
+    label: 'Organic content & SEO',
+    icon: '📝',
+    tagline: 'Build an audience that finds you through search and sharing.',
+    whenItWorks:
+      'B2B SaaS, info-products, or any problem people actively Google. Compounds over 6-18 months.',
+    whenItFails:
+      'Commodity products with no search intent, or urgent/local purchases where customers do not research.',
+    industries: ['SaaS / Software', 'Services / Agency', 'Media / Content', 'E-commerce'],
+    pricingModels: [
+      'Subscription (monthly)',
+      'Subscription (annual)',
+      'Licensing',
+      'Freemium + upgrades',
+      'One-time sale',
+    ],
+    minPrice: 10,
+    maxPrice: 100000,
+    checklist: [
+      { id: 'keywords', label: 'Identify 20+ keywords your exact customer searches' },
+      { id: 'calendar', label: 'Publish cadence defined (e.g. 2 posts/week for 6 months)' },
+      { id: 'distribution', label: 'Distribution plan for each post (newsletter, social, SEO)' },
+      { id: 'metrics', label: 'Measure signups/trials per post, not pageviews' },
+    ],
+  },
+  {
+    key: 'paid-ads',
+    label: 'Paid acquisition (ads)',
+    icon: '💸',
+    tagline: 'Spend money to reach specific customers predictably.',
+    whenItWorks:
+      'Clear LTV, measurable conversion, and CAC well below contribution. Works for most consumer products.',
+    whenItFails:
+      'Low-margin products (ads eat the margin), long sales cycles without mid-funnel nurture, or when LTV is unknown.',
+    industries: [
+      'E-commerce',
+      'SaaS / Software',
+      'Services / Agency',
+      'Shortlet / Hospitality',
+      'Marketplace',
+    ],
+    pricingModels: [
+      'One-time sale',
+      'Subscription (monthly)',
+      'Subscription (annual)',
+      'Freemium + upgrades',
+      'Per-use / Pay-per-transaction',
+    ],
+    minPrice: 15,
+    maxPrice: 100000,
+    checklist: [
+      { id: 'ltv', label: 'LTV estimated from cohort data or defensible proxy' },
+      { id: 'cac-target', label: 'Target CAC set (usually < 1/3 of LTV)' },
+      { id: 'creative', label: '3+ ad creatives ready for A/B testing' },
+      { id: 'landing', label: 'Landing page with tracked conversion goal' },
+      { id: 'budget', label: 'Test budget scoped (£500-£2000 to reach statistical signal)' },
+    ],
+  },
+  {
+    key: 'sales-outbound',
+    label: 'Direct sales / outbound',
+    icon: '📞',
+    tagline: 'Go find customers one at a time — cold email, LinkedIn, calls.',
+    whenItWorks:
+      'High-ACV B2B (£2k+ annual contract). Labor-intensive but buying intent is explicit.',
+    whenItFails:
+      'Low-priced products (cost per touch exceeds margin), or consumer products where cold outreach annoys.',
+    industries: ['SaaS / Software', 'Services / Agency', 'Manufacturing', 'Other'],
+    pricingModels: [
+      'Subscription (annual)',
+      'Licensing',
+      'One-time sale',
+      'Usage-based',
+      'Other',
+    ],
+    minPrice: 500,
+    maxPrice: 1000000,
+    checklist: [
+      { id: 'icp', label: 'Ideal customer profile (ICP) written down precisely' },
+      { id: 'list', label: '200+ named prospects in a list with contact info' },
+      { id: 'scripts', label: 'Cold email + call scripts drafted and reviewed' },
+      { id: 'crm', label: 'Pipeline tracking set up (even a spreadsheet)' },
+      { id: 'cadence', label: 'Weekly outreach volume target (e.g. 100 emails/week)' },
+    ],
+  },
+  {
+    key: 'community',
+    label: 'Community & creator-led',
+    icon: '🫂',
+    tagline: 'Get adopted inside a niche community where your customer already hangs out.',
+    whenItWorks:
+      'Passionate niches (dev tools, hobbies, creative software). Works when you are a credible member yourself.',
+    whenItFails:
+      'Generic mass-market products, or if you are seen as a drive-by marketer rather than a real participant.',
+    industries: ['SaaS / Software', 'Media / Content', 'E-commerce', 'Other'],
+    pricingModels: [
+      'Subscription (monthly)',
+      'Freemium + upgrades',
+      'One-time sale',
+      'Usage-based',
+      'Other',
+    ],
+    minPrice: 0,
+    maxPrice: 10000,
+    checklist: [
+      { id: 'communities', label: 'Identified 3-5 communities where your customer is active' },
+      { id: 'participation', label: 'Contributed genuinely (no product pitch) for 2+ weeks' },
+      { id: 'permission', label: 'Checked community rules on self-promotion' },
+      { id: 'creators', label: 'Listed 5-10 creators/voices who reach the same audience' },
+    ],
+  },
+  {
+    key: 'marketplace',
+    label: 'Marketplace / platform',
+    icon: '🏪',
+    tagline: 'List where demand already exists: App Store, Etsy, Amazon, Airbnb, Shopify App Store.',
+    whenItWorks:
+      'Marketplace-native categories. Demand is instant. Usually works when you are #1-3 in a narrow niche.',
+    whenItFails:
+      'Platforms take a tax (15-30%), own the customer, and can change rules overnight. Hard to build a moat.',
+    industries: [
+      'E-commerce',
+      'Shortlet / Hospitality',
+      'Marketplace',
+      'Retail',
+      'SaaS / Software',
+      'Media / Content',
+    ],
+    pricingModels: [
+      'One-time sale',
+      'Per-use / Pay-per-transaction',
+      'Subscription (monthly)',
+      'Usage-based',
+    ],
+    minPrice: 1,
+    maxPrice: 100000,
+    checklist: [
+      { id: 'platform', label: 'Chosen the one platform where your customer buys' },
+      { id: 'listing', label: 'Optimized listing: keywords, reviews plan, photography' },
+      { id: 'take-rate', label: 'Platform take-rate modeled into variable costs' },
+      { id: 'off-platform', label: 'Plan to capture customer off-platform (newsletter, direct site)' },
+    ],
+  },
+  {
+    key: 'partnerships',
+    label: 'Partnerships & channel',
+    icon: '🤝',
+    tagline: 'Integrate with / resell through businesses that already have your customer.',
+    whenItWorks:
+      'B2B with clear complementary products. Partner has a sales motion; you bolt on.',
+    whenItFails:
+      'No revenue share large enough to motivate the partner, or the partner sees you as competition.',
+    industries: ['SaaS / Software', 'Services / Agency', 'Manufacturing', 'Other'],
+    pricingModels: [
+      'Subscription (annual)',
+      'Licensing',
+      'Usage-based',
+      'One-time sale',
+      'Other',
+    ],
+    minPrice: 100,
+    maxPrice: 1000000,
+    checklist: [
+      { id: 'targets', label: '5-10 candidate partners mapped with decision-makers' },
+      { id: 'rev-share', label: 'Revenue share / referral fee that motivates the partner' },
+      { id: 'integration', label: 'Technical or process integration story written down' },
+      { id: 'co-marketing', label: 'Co-marketing or co-selling plan (not just a logo swap)' },
+    ],
+  },
+  {
+    key: 'local-physical',
+    label: 'Physical / local presence',
+    icon: '📍',
+    tagline: 'Foot traffic, local ads, flyers, events, word of mouth in a defined area.',
+    whenItWorks:
+      'Local services, restaurants, retail, shortlets. Geography defines the market.',
+    whenItFails:
+      'Scalable/remote products where spending on local channels caps you at local TAM.',
+    industries: [
+      'Restaurant / Food',
+      'Retail',
+      'Services / Agency',
+      'Shortlet / Hospitality',
+      'Other',
+    ],
+    pricingModels: ['One-time sale', 'Per-use / Pay-per-transaction', 'Usage-based', 'Other'],
+    minPrice: 1,
+    maxPrice: 10000,
+    checklist: [
+      { id: 'catchment', label: 'Defined catchment area (postcodes, mile radius)' },
+      { id: 'reviews', label: 'Google Business Profile claimed, review flywheel planned' },
+      { id: 'referrals', label: 'Referral or loyalty mechanism in place' },
+      { id: 'local-ads', label: 'Local channel tested (flyers, local paper, community board, events)' },
+    ],
+  },
+];
+
+export function defaultDistribution(): DistributionData {
+  return {
+    primaryStrategyKey: '',
+    secondaryStrategyKey: '',
+    estimatedCAC: 0,
+    channelTested: '',
+    testResult: '',
+    checklistProgress: {},
+    notes: '',
+  };
+}
+
+export function defaultIdeaFilter(): IdeaFilterData {
+  return {
+    problemStatement: '',
+    problemAcute: '',
+    problemFrequent: '',
+    problemExpensive: '',
+    problemAnnualCost: 0,
+    problemEvidence: '',
+    wtpPrecedent: '',
+    wtpCommitment: '',
+    wtpPrice: 0,
+    wtpEvidence: '',
+    reachCanName: '',
+    reachHaveList: '',
+    reachTestedOutreach: '',
+    reachChannels: '',
+    reachEvidence: '',
   };
 }
 
@@ -129,6 +382,8 @@ export function newAnalysis(name = 'New business'): BusinessAnalysis {
     setupCost: 0,
     cashReserve: 0,
     scorecard: defaultScorecard(),
+    distribution: defaultDistribution(),
+    ideaFilter: defaultIdeaFilter(),
     chat: [],
   };
 }
@@ -162,4 +417,28 @@ export const TOOLTIPS: Record<string, string> = {
     'Months before cash reserves run out if you keep losing money at the current rate. Why it matters: runway is oxygen. Rule of thumb: protect it — every month of runway is optionality.',
   monthlyProfit:
     'Revenue minus all costs for a month. Why it matters: profit, not revenue, is what you actually keep. Rule of thumb: revenue is ego, profit is sanity, cash is king.',
+  estimatedCAC:
+    'Customer Acquisition Cost — what you expect to spend to land one paying customer through this channel. Why it matters: if CAC exceeds a few months of contribution margin, the channel burns cash. Rule of thumb: CAC should be under 1/3 of lifetime contribution from that customer.',
+  distributionFit:
+    'How well a channel matches your industry, pricing model, and price point. A high fit score does not guarantee success — it just means the channel is not obviously wrong for your business.',
+  problemAcute:
+    'Acute means the problem hurts in the moment — not mildly inconvenient. If someone can shrug it off, they will not pay to fix it.',
+  problemFrequent:
+    'Frequent means it happens often enough to be top-of-mind. Once-a-year problems are hard to sell against — the urgency fades before they buy.',
+  problemExpensive:
+    'Expensive means the problem has a real cost in money, time, or risk. If it costs them nothing to live with, any price is too high.',
+  problemAnnualCost:
+    'Rough £ value of the pain to one customer per year — money lost, hours wasted × their hourly rate, or damage risk. Why it matters: WTP is usually 10-30% of the cost of the problem.',
+  wtpPrecedent:
+    'Are people already paying something — an existing tool, a workaround, a consultant, a spreadsheet with a subscription — to manage this? Precedent is the single strongest WTP signal.',
+  wtpCommitment:
+    'Has a specific prospect told you "I would pay £X for this" with a price attached? Vague interest does not count. Soft commitments predict nothing.',
+  wtpPrice:
+    'The price at least one prospect verbally committed to pay. Rule of thumb: discount verbal commitments by 70% to estimate real conversion.',
+  reachCanName:
+    'Can you name 3 specific places (subreddits, LinkedIn groups, conferences, publications) where your exact customer actually spends time?',
+  reachHaveList:
+    'Have you compiled a list of at least 20 named prospects with contact info? If not, you are guessing at your market.',
+  reachTestedOutreach:
+    'Have you reached out — cold email, DM, conversation — and heard back? Plans to test do not count. Only actual tests.',
 };

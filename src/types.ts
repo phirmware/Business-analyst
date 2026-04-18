@@ -5,6 +5,39 @@ export interface LineItem {
   name: string;
   amount: number;
   type: CostType; // 'fixed' = £, 'percent' = % of revenue (only meaningful for variable)
+  isThirdParty?: boolean; // flag: depends on a third-party supplier (API, platform, upstream vendor)
+}
+
+export type PricingMode =
+  | 'flat-subscription'
+  | 'one-time'
+  | 'usage'
+  | 'hybrid'
+  | 'tiered';
+
+export type UsageDistributionShape = 'flat' | 'moderate' | 'power-law';
+
+export interface UsagePricingData {
+  // Consumption economics — what the unit of usage actually is
+  consumptionUnitLabel: string; // e.g. "API call", "message", "GB processed"
+  pricePerConsumptionUnit: number; // £ per consumption unit
+  consumptionVariableCosts: LineItem[]; // variable cost per consumption unit (supplier APIs etc.)
+  baseFee: number; // optional monthly base fee charged on top of usage
+  // Customer behaviour — distribution of usage across customers
+  averageUnitsPerCustomer: number; // mean consumption units / paying customer / month
+  distributionShape: UsageDistributionShape; // flat / moderate / power-law
+  p25Units: number;
+  p50Units: number;
+  p75Units: number;
+  p90Units: number;
+  // Acquisition funnel — free tier cost included in True CAC
+  freeTierUnits: number; // units consumed by a typical free user per month
+  conversionRatePct: number; // % of free users who convert to paying
+  directCAC: number; // £ spent on ads/sales per paying customer (excludes free-tier drag)
+  // Retention & expansion
+  monthlyChurnPct: number; // % of paying customers lost per month
+  nrrPct: number; // Net Revenue Retention — 100 = flat, >100 = expansion, <100 = contraction
+  customerLifetimeMonths: number; // optional override; if 0, derived from churn
 }
 
 export interface FixedItem {
@@ -74,7 +107,8 @@ export interface BusinessAnalysis {
   description: string;
   pricingModel: string;
   industry: string;
-  // Unit economics
+  pricingMode: PricingMode;
+  // Unit economics (flat-pricing inputs; in usage mode `unitsPerMonth` is reused as "paying customers")
   unitDefinition: string;
   pricePerUnit: number;
   unitsPerMonth: number;
@@ -82,6 +116,8 @@ export interface BusinessAnalysis {
   fixedCosts: FixedItem[];
   setupCost: number;
   cashReserve: number;
+  // Usage-based pricing (only loaded when pricingMode in usage/hybrid/tiered)
+  usagePricing: UsagePricingData;
   // Scorecard
   scorecard: ScorecardAnswers;
   // Distribution

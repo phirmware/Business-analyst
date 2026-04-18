@@ -1,6 +1,13 @@
 import type { BusinessAnalysis } from './types';
-import { calcUnitEconomics, formatGBP, formatPct, formatNum } from './calculations';
-import { DISTRIBUTION_STRATEGIES } from './constants';
+import {
+  calcUnitEconomics,
+  calcUsageEconomics,
+  formatGBP,
+  formatPct,
+  formatNum,
+  isUsageMode,
+} from './calculations';
+import { DISTRIBUTION_STRATEGIES, PRICING_MODE_OPTIONS } from './constants';
 
 export function analysisToMarkdown(a: BusinessAnalysis): string {
   const ue = calcUnitEconomics(a);
@@ -18,6 +25,9 @@ export function analysisToMarkdown(a: BusinessAnalysis): string {
     d.estimatedCAC > 0 && ue.contributionPerUnit > 0
       ? (d.estimatedCAC / ue.contributionPerUnit).toFixed(1) + '× contribution'
       : '—';
+  const modeLabel =
+    PRICING_MODE_OPTIONS.find((p) => p.key === a.pricingMode)?.label || a.pricingMode;
+  const usageBlock = isUsageMode(a) ? usageMarkdown(a) : '';
   return `# Business Reality Check — ${a.name}
 
 _Exported ${new Date().toLocaleString()}_
@@ -26,6 +36,7 @@ _Exported ${new Date().toLocaleString()}_
 - **Description:** ${a.description || '—'}
 - **Industry:** ${a.industry}
 - **Pricing model:** ${a.pricingModel}
+- **Pricing mode:** ${modeLabel}
 - **Unit:** ${a.unitDefinition}
 
 ## Inputs
@@ -62,7 +73,7 @@ ${fc || '(none)'}
 - **Q4 macro risks:** ${a.scorecard.q4Macro || '—'}
 - **Q5 notes:** ${a.scorecard.q5Notes || '—'}
 
-## Distribution
+${usageBlock}## Distribution
 - **Primary channel:** ${strategyLabel(d.primaryStrategyKey)}
 - **Secondary channel:** ${strategyLabel(d.secondaryStrategyKey)}
 - **Estimated CAC:** ${d.estimatedCAC > 0 ? '£' + d.estimatedCAC : '—'} (${cacRatio})
@@ -86,6 +97,35 @@ ${fc || '(none)'}
 
 function yn(v: string): string {
   return v === '' ? '—' : v;
+}
+
+function usageMarkdown(a: BusinessAnalysis): string {
+  const u = a.usagePricing;
+  const ue = calcUsageEconomics(a);
+  const unit = u.consumptionUnitLabel || 'unit';
+  const third = u.consumptionVariableCosts
+    .filter((c) => c.isThirdParty)
+    .map((c) => `${c.name} (${c.type === 'percent' ? c.amount + '%' : '£' + c.amount})`)
+    .join(', ') || '—';
+  const ltvCac = isFinite(ue.ltvToCacRatio) ? `${ue.ltvToCacRatio.toFixed(1)}×` : '—';
+  return `## Usage-based pricing
+- **Consumption unit:** ${unit}
+- **Price / ${unit}:** ${formatGBP(u.pricePerConsumptionUnit)}
+- **Variable cost / ${unit}:** ${formatGBP(ue.variableCostPerConsumptionUnit)} (3rd-party: ${formatGBP(ue.thirdPartyCostPerConsumptionUnit)} — ${third})
+- **Per-unit margin:** ${formatPct(ue.consumptionMarginPct)}
+- **Monthly base fee:** ${formatGBP(u.baseFee)}
+- **Avg ${unit}/customer/mo:** ${formatNum(u.averageUnitsPerCustomer)} — distribution: ${u.distributionShape}
+- **Percentile usage (p25 / p50 / p75 / p90):** ${formatNum(u.p25Units)} / ${formatNum(u.p50Units)} / ${formatNum(u.p75Units)} / ${formatNum(u.p90Units)}
+- **Percentile contribution (p25 / p50 / p75 / p90):** ${formatGBP(ue.p25Contribution)} / ${formatGBP(ue.p50Contribution)} / ${formatGBP(ue.p75Contribution)} / ${formatGBP(ue.p90Contribution)}
+- **Top 10% / Top 20% revenue share:** ${formatPct(ue.top10PctShare)} / ${formatPct(ue.top20PctShare)}
+- **Supplier dependency:** ${formatPct(ue.supplierDependencyPct)}
+- **Free-tier ${unit}/user/mo:** ${formatNum(u.freeTierUnits)} at ${u.conversionRatePct}% conversion
+- **Direct CAC / free-tier drag / True CAC:** ${formatGBP(u.directCAC)} / ${formatGBP(ue.freeTierDragPerPaying)} / ${formatGBP(ue.trueCAC)}
+- **Monthly churn:** ${u.monthlyChurnPct}% | **NRR:** ${u.nrrPct}% | **Lifetime:** ${ue.effectiveLifetimeMonths.toFixed(1)} mo
+- **LTV:** ${formatGBP(ue.ltv)} | **LTV : True-CAC:** ${ltvCac} | **Payback:** ${isFinite(ue.paybackMonths) ? ue.paybackMonths.toFixed(1) + ' mo' : '—'}
+- **Monthly profit (usage-model):** ${formatGBP(ue.monthlyProfit)} | **Annual:** ${formatGBP(ue.annualProfit)}
+
+`;
 }
 
 export function exportAnalysisMarkdown(a: BusinessAnalysis) {

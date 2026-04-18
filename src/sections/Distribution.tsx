@@ -63,7 +63,7 @@ export function Distribution({
           Based on your industry, pricing model, and price point — not a guarantee, just a
           filter against obviously-wrong channels.
         </p>
-        <div className="grid md:grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           {ranked.slice(0, 2).map(({ strategy, score }) => (
             <StrategyCard
               key={strategy.key}
@@ -93,7 +93,7 @@ export function Distribution({
 
       {/* Strategy picker */}
       <Card title="Your channels">
-        <div className="grid md:grid-cols-2 gap-4 mb-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
           <Field label="Primary channel (where you will focus first)">
             <StrategySelect
               value={d.primaryStrategyKey}
@@ -118,7 +118,7 @@ export function Distribution({
 
       {/* CAC reality check */}
       <Card title="CAC reality check">
-        <div className="grid md:grid-cols-3 gap-4 mb-4">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
           <Field label="Estimated CAC (£ per customer)" tooltip={TOOLTIPS.estimatedCAC}>
             <NumberInput
               value={d.estimatedCAC}
@@ -155,7 +155,7 @@ export function Distribution({
         <p className="text-sm text-slate-600 dark:text-slate-300 mb-3">
           Plans are cheap. What have you actually tried?
         </p>
-        <div className="grid md:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <Field label="Which channel have you tested?">
             <TextInput
               value={d.channelTested}
@@ -193,7 +193,7 @@ export function Distribution({
 
       {/* All strategies reference */}
       <Card title="All 7 channels ranked for this business">
-        <div className="grid md:grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           {ranked.map(({ strategy, score }) => (
             <StrategyCard
               key={strategy.key}
@@ -303,7 +303,7 @@ function ChannelDetail({
         </span>
       }
     >
-      <div className="grid md:grid-cols-2 gap-4 mb-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
         <div>
           <div className="text-xs uppercase tracking-wide text-slate-500 mb-1">
             When it works

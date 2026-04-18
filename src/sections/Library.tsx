@@ -193,7 +193,7 @@ const CARDS: LibraryCard[] = [
     tags: ['mental-model', 'metrics'],
     body: (
       <>
-        <div className="grid md:grid-cols-2 gap-4 mb-3">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-3">
           <div>
             <div className="text-xs uppercase tracking-wide text-slate-500 mb-1">Vanity metrics</div>
             <ul>
@@ -301,6 +301,210 @@ const CARDS: LibraryCard[] = [
     ),
   },
   {
+    id: 'usage-vs-flat',
+    title: 'Why Usage Pricing Is Different From Flat Pricing',
+    blurb: 'In flat pricing every customer looks the same. In usage pricing one customer can be 100× another.',
+    tags: ['usage-pricing', 'fundamentals'],
+    body: (
+      <>
+        <p>
+          In a flat-subscription business — Netflix, a gym, a typical SaaS — every paying
+          customer pays the same price and creates similar costs. Economics reduce to ARPU,
+          churn, and gross margin. The math is clean.
+        </p>
+        <p>
+          In a <strong>usage-based business</strong> — API platforms, messaging, compute
+          infrastructure, serverless anything — customers use very different amounts. One
+          whale can account for 40% of revenue, and if that whale leaves, you do not lose 1
+          customer; you lose 40% of the P&amp;L. The average hides this entirely.
+        </p>
+        <p>Four things change under usage pricing:</p>
+        <ul>
+          <li>
+            <strong>Averages lie.</strong> Always look at p25, p50, p75, p90 — a mean with a
+            long tail hides loss-making customers at the bottom and whale concentration at
+            the top.
+          </li>
+          <li>
+            <strong>Free tier has a real cost.</strong> Every free user consumes supplier
+            calls, compute, storage. Your "CAC" is actually direct CAC + (free-tier variable
+            cost × 1 / conversion rate). Call this <em>True CAC</em>.
+          </li>
+          <li>
+            <strong>Supplier dependency is direct.</strong> If you wrap an upstream API,
+            you are a price-taker twice over — your upstream can raise prices and you may
+            not be able to pass it on.
+          </li>
+          <li>
+            <strong>NRR is the silent killer (or multiplier).</strong> Revenue from existing
+            customers expands or contracts. 120% NRR means you grow even without new
+            acquisition. 85% NRR means you are running uphill.
+          </li>
+        </ul>
+      </>
+    ),
+  },
+  {
+    id: 'whale-and-mouse',
+    title: 'The Whale-and-Mouse Problem',
+    blurb: 'When a handful of customers drive most of your revenue, you do not have a business — you have a loan.',
+    tags: ['usage-pricing', 'concentration'],
+    body: (
+      <>
+        <p>
+          Usage businesses typically show <strong>power-law distributions</strong>: the top
+          10% of customers drive 40–60% of revenue; the top 1% can be 20%+ on their own.
+          This is the "whale-and-mouse" dynamic.
+        </p>
+        <p>
+          It feels good on the way up — one enterprise deal can make the month. It feels
+          terrible on the way down — one enterprise churn event can sink the quarter, and
+          the VP who signed them already left, and the new VP wants to re-evaluate.
+        </p>
+        <p>Three defenses:</p>
+        <ul>
+          <li>
+            <strong>Concentration limits.</strong> If any single customer exceeds ~10% of
+            revenue, investors get nervous — because they should.
+          </li>
+          <li>
+            <strong>Base fees and minimums.</strong> Charge everyone a floor so the
+            p25-customer contribution is positive. Use usage as upside, not as the whole
+            revenue mechanism.
+          </li>
+          <li>
+            <strong>Multi-threaded accounts.</strong> A whale who integrated with 8 teams
+            and 4 workflows is sticky. A whale using one API in one script is a flight
+            risk.
+          </li>
+        </ul>
+      </>
+    ),
+  },
+  {
+    id: 'free-tier-trap',
+    title: 'The Free Tier Trap',
+    blurb: 'Free users feel free. They are not. Do the math before you advertise "free forever".',
+    tags: ['usage-pricing', 'funnel'],
+    body: (
+      <>
+        <p>
+          Suppose your free tier is 500 API calls/user/month, your supplier charges
+          £0.004/call, and 3% of free users convert to paying.
+        </p>
+        <ul>
+          <li>Cost per free user: 500 × £0.004 = <strong>£2/month</strong>.</li>
+          <li>At 3% conversion, each paying customer has paid for <strong>~33 free users</strong>.</li>
+          <li>Free-tier drag per paying customer: 33 × £2 = <strong>£66</strong>.</li>
+          <li>
+            If your "CAC" (ads + sales) is £30, your True CAC is <strong>£96</strong>, not
+            £30. Now compare that to LTV.
+          </li>
+        </ul>
+        <p>
+          This single calculation has killed companies that never ran it. Ways to
+          de-risk:
+        </p>
+        <ul>
+          <li>Lower the free-tier ceiling.</li>
+          <li>Gate expensive operations (image gen, long context) behind paid plans only.</li>
+          <li>Require credit-card-on-file for free tier — conversion jumps, abuse drops.</li>
+          <li>Time-box free trials instead of "free forever".</li>
+        </ul>
+      </>
+    ),
+  },
+  {
+    id: 'nrr',
+    title: 'Net Revenue Retention — The Silent Killer (or Multiplier)',
+    blurb: 'NRR ≥ 120% means you grow even if you acquire nobody. NRR < 90% is a ticking clock.',
+    tags: ['usage-pricing', 'retention'],
+    body: (
+      <>
+        <p>
+          Net Revenue Retention measures what a cohort of customers is worth one year later
+          — expansion and contraction included, excluding new logos. It is the single most
+          important usage-pricing metric that most founders never calculate.
+        </p>
+        <ul>
+          <li><strong>NRR &gt; 120%</strong> (best-in-class): cohort revenue grows 20%+ without any new customers. The business compounds.</li>
+          <li><strong>NRR 100–120%</strong>: healthy. Expansion covers churn.</li>
+          <li><strong>NRR 90–100%</strong>: flat to mildly contracting. Every new customer has to first fill a hole.</li>
+          <li><strong>NRR &lt; 90%</strong>: the business is shrinking from within. More acquisition just fills a leakier bucket.</li>
+        </ul>
+        <p>
+          Usage businesses have a structural NRR advantage — customers who succeed use
+          more. Miss that advantage and you are running a flat-subscription business with
+          whale-and-mouse risk. The worst of both worlds.
+        </p>
+      </>
+    ),
+  },
+  {
+    id: 'supplier-dependency',
+    title: 'Supplier Dependency Risk in Usage Pricing',
+    blurb: 'If your variable cost comes from a single upstream vendor, you are not really pricing your product.',
+    tags: ['usage-pricing', 'moats'],
+    body: (
+      <>
+        <p>
+          Many usage businesses are wrappers — thin layers over OpenAI, AWS, Stripe,
+          Twilio, a specific LLM. When 70%+ of your variable cost is a single third party,
+          three bad things are true:
+        </p>
+        <ul>
+          <li>
+            <strong>Your supplier can raise prices.</strong> They did it once; they can do
+            it again. You cannot pass it fully through without losing customers.
+          </li>
+          <li>
+            <strong>Your supplier can compete with you.</strong> They see your usage
+            patterns. If you become big enough to care about, they ship a feature that
+            obsoletes yours.
+          </li>
+          <li>
+            <strong>Your supplier can go down.</strong> You are only as reliable as them —
+            and your customers blame you, not them.
+          </li>
+        </ul>
+        <p>
+          Defensible usage businesses diversify (multi-model, multi-region), contract
+          volume commitments, or add real value on top of the raw API — data, workflow,
+          integrations, a trained model on proprietary data. Pure pass-through is not a
+          business; it is a pricing arbitrage that closes.
+        </p>
+      </>
+    ),
+  },
+  {
+    id: 'usage-when-right',
+    title: 'When Usage Pricing Is Right vs. Wrong',
+    blurb: 'Usage pricing is a tool, not a strategy. It works when cost scales with usage — not because "it is modern".',
+    tags: ['usage-pricing', 'pricing-strategy'],
+    body: (
+      <>
+        <p>Usage pricing works when:</p>
+        <ul>
+          <li>Your <strong>variable cost scales with usage</strong> (API calls, compute, bandwidth).</li>
+          <li>Customers have <strong>very different usage levels</strong> — a flat price would either underprice whales or overprice minnows.</li>
+          <li>Value is <strong>measurably tied to volume</strong> (more messages sent = more value delivered).</li>
+        </ul>
+        <p>Usage pricing is wrong (or needs a base fee) when:</p>
+        <ul>
+          <li><strong>Your cost is mostly fixed.</strong> Charging per-unit on a fixed-cost product means occasional users subsidise you — fragile.</li>
+          <li><strong>Customers cannot predict their usage.</strong> Unpredictable bills drive churn and resentment.</li>
+          <li><strong>Value is binary</strong> — either you get the answer or you don't. Charging per token for a tool that either works or doesn't creates adverse incentives.</li>
+        </ul>
+        <p>
+          <strong>Hybrid pricing</strong> (base fee + usage) is usually the safe default.
+          The base fee covers your fixed cost of serving low-usage customers. Usage
+          captures upside from heavy users. Most infrastructure SaaS converges here over
+          time.
+        </p>
+      </>
+    ),
+  },
+  {
     id: 'reading',
     title: 'Recommended Reading',
     blurb: 'Three books. Read them before you commit real money.',
@@ -348,7 +552,7 @@ export function Library() {
       <div className="max-w-md">
         <TextInput value={query} onChange={setQuery} placeholder="Search cards…" />
       </div>
-      <div className="grid md:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {filtered.map((c) => {
           const isOpen = open[c.id] ?? false;
           return (

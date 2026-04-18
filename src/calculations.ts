@@ -1,4 +1,10 @@
-import type { BusinessAnalysis, LineItem, FixedItem } from './types';
+import type {
+  BusinessAnalysis,
+  FixedItem,
+  LineItem,
+  UsagePricingData,
+} from './types';
+import { DECILE_SHAPES } from './constants';
 
 export interface Variances {
   revenuePct: number; // -50 .. +50
@@ -145,4 +151,186 @@ export function formatNum(n: number, digits = 0): string {
     maximumFractionDigits: digits,
     minimumFractionDigits: digits,
   });
+}
+
+// -----------------------------------------------------------------------------
+// Usage-based pricing
+// -----------------------------------------------------------------------------
+
+export interface UsageEconomics {
+  // Per consumption unit
+  pricePerConsumptionUnit: number;
+  variableCostPerConsumptionUnit: number;
+  contributionPerConsumptionUnit: number;
+  consumptionMarginPct: number;
+  thirdPartyCostPerConsumptionUnit: number;
+  supplierDependencyPct: number; // 0–100, share of variable cost that is third-party
+
+  // Per paying customer (monthly)
+  avgRevenuePerCustomer: number;
+  avgVariableCostPerCustomer: number;
+  avgContributionPerCustomer: number;
+  baseFee: number;
+
+  // Percentile contribution (to expose whale-and-mouse)
+  p25Contribution: number;
+  p50Contribution: number;
+  p75Contribution: number;
+  p90Contribution: number;
+
+  // Acquisition / retention
+  directCAC: number;
+  freeTierDragPerPaying: number;
+  trueCAC: number;
+  effectiveLifetimeMonths: number;
+  ltv: number;
+  ltvToCacRatio: number; // LTV / trueCAC, or Infinity if trueCAC=0
+  paybackMonths: number; // trueCAC / avgContribution, Infinity if ≤0
+
+  // Concentration (revenue share by decile, lowest → highest usage)
+  decileRevenueShare: number[];
+  top10PctShare: number; // % of revenue from top decile
+  top20PctShare: number; // % of revenue from top 2 deciles
+
+  // Business-level monthly
+  payingCustomers: number;
+  monthlyRevenue: number;
+  monthlyVariableCosts: number;
+  monthlyFixedCosts: number;
+  monthlyProfit: number;
+  annualProfit: number;
+}
+
+function lineItemCostAt(items: LineItem[], price: number, variablePct: number): number {
+  return items.reduce((sum, it) => {
+    const adj = applyVariance(it.amount, variablePct);
+    if (it.type === 'percent') return sum + (price * adj) / 100;
+    return sum + adj;
+  }, 0);
+}
+
+function thirdPartyCostAt(items: LineItem[], price: number, variablePct: number): number {
+  return items.reduce((sum, it) => {
+    if (!it.isThirdParty) return sum;
+    const adj = applyVariance(it.amount, variablePct);
+    if (it.type === 'percent') return sum + (price * adj) / 100;
+    return sum + adj;
+  }, 0);
+}
+
+// NRR expansion (monthly). If NRR=100 -> 0 expansion; >100 -> positive; <100 -> negative.
+function monthlyExpansionPct(nrrPct: number): number {
+  const annualExpansion = (nrrPct || 100) - 100; // e.g. +5 or -15
+  // Distribute annual expansion linearly across 12 months as a rough monthly figure.
+  return annualExpansion / 12;
+}
+
+export function effectiveLifetime(u: UsagePricingData): number {
+  if (u.customerLifetimeMonths && u.customerLifetimeMonths > 0) {
+    return u.customerLifetimeMonths;
+  }
+  const churn = Math.max(0, u.monthlyChurnPct || 0);
+  const expansion = monthlyExpansionPct(u.nrrPct);
+  const net = Math.max(0.5, churn - expansion); // floor at 0.5%/mo to avoid absurd lifetimes
+  return 100 / net; // months; e.g. 5%/mo net churn → 20 months
+}
+
+export function calcUsageEconomics(
+  a: BusinessAnalysis,
+  v: Variances = zeroVariances
+): UsageEconomics {
+  const u = a.usagePricing;
+
+  // Per-consumption-unit
+  const price = applyVariance(u.pricePerConsumptionUnit || 0, v.revenuePct);
+  const variableCostPerConsumption = lineItemCostAt(
+    u.consumptionVariableCosts,
+    price,
+    v.variablePct
+  );
+  const thirdPartyCost = thirdPartyCostAt(u.consumptionVariableCosts, price, v.variablePct);
+  const contribution = price - variableCostPerConsumption;
+  const consumptionMarginPct = price > 0 ? (contribution / price) * 100 : 0;
+  const supplierDependencyPct =
+    variableCostPerConsumption > 0 ? (thirdPartyCost / variableCostPerConsumption) * 100 : 0;
+
+  // Per customer (monthly)
+  const avgUnits = Math.max(0, applyVariance(u.averageUnitsPerCustomer || 0, v.volumePct));
+  const baseFee = u.baseFee || 0;
+  const avgRevenuePerCustomer = avgUnits * price + baseFee;
+  const avgVariableCostPerCustomer = avgUnits * variableCostPerConsumption;
+  const avgContributionPerCustomer = avgRevenuePerCustomer - avgVariableCostPerCustomer;
+
+  const contributionAt = (units: number) => baseFee + units * contribution;
+  const p25Contribution = contributionAt(Math.max(0, u.p25Units || 0));
+  const p50Contribution = contributionAt(Math.max(0, u.p50Units || 0));
+  const p75Contribution = contributionAt(Math.max(0, u.p75Units || 0));
+  const p90Contribution = contributionAt(Math.max(0, u.p90Units || 0));
+
+  // True CAC — direct + free-tier drag
+  const conversion = Math.max(0.01, u.conversionRatePct || 0) / 100;
+  const freeTierVariableCost = (u.freeTierUnits || 0) * variableCostPerConsumption;
+  const freeTierDragPerPaying = freeTierVariableCost / conversion; // each paying customer "carries" 1/conversion free users
+  const trueCAC = (u.directCAC || 0) + freeTierDragPerPaying;
+
+  // LTV via effective lifetime × contribution
+  const lifetime = effectiveLifetime(u);
+  const cappedLifetime = Math.min(lifetime, 60);
+  const ltv = avgContributionPerCustomer * cappedLifetime;
+  const ltvToCacRatio = trueCAC > 0 ? ltv / trueCAC : Infinity;
+  const paybackMonths =
+    avgContributionPerCustomer > 0 ? trueCAC / avgContributionPerCustomer : Infinity;
+
+  // Concentration
+  const decile = DECILE_SHAPES[u.distributionShape] || DECILE_SHAPES['moderate'];
+  const top10PctShare = (decile[9] || 0) * 100;
+  const top20PctShare = ((decile[9] || 0) + (decile[8] || 0)) * 100;
+
+  // Business-level monthly (payingCustomers reused from unitsPerMonth)
+  const payingCustomers = Math.max(0, applyVariance(a.unitsPerMonth || 0, v.volumePct));
+  const monthlyRevenue = avgRevenuePerCustomer * payingCustomers;
+  const monthlyVariableCosts = avgVariableCostPerCustomer * payingCustomers;
+  const monthlyFixedCosts = totalFixed(a.fixedCosts, v.fixedPct);
+  const monthlyProfit = monthlyRevenue - monthlyVariableCosts - monthlyFixedCosts;
+
+  return {
+    pricePerConsumptionUnit: price,
+    variableCostPerConsumptionUnit: variableCostPerConsumption,
+    contributionPerConsumptionUnit: contribution,
+    consumptionMarginPct,
+    thirdPartyCostPerConsumptionUnit: thirdPartyCost,
+    supplierDependencyPct,
+    avgRevenuePerCustomer,
+    avgVariableCostPerCustomer,
+    avgContributionPerCustomer,
+    baseFee,
+    p25Contribution,
+    p50Contribution,
+    p75Contribution,
+    p90Contribution,
+    directCAC: u.directCAC || 0,
+    freeTierDragPerPaying,
+    trueCAC,
+    effectiveLifetimeMonths: lifetime,
+    ltv,
+    ltvToCacRatio,
+    paybackMonths,
+    decileRevenueShare: decile.slice(),
+    top10PctShare,
+    top20PctShare,
+    payingCustomers,
+    monthlyRevenue,
+    monthlyVariableCosts,
+    monthlyFixedCosts,
+    monthlyProfit,
+    annualProfit: monthlyProfit * 12,
+  };
+}
+
+export function isUsageMode(a: BusinessAnalysis): boolean {
+  return (
+    a.pricingMode === 'usage' ||
+    a.pricingMode === 'hybrid' ||
+    a.pricingMode === 'tiered'
+  );
 }

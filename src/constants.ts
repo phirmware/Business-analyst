@@ -4,7 +4,10 @@ import type {
   FixedItem,
   IdeaFilterData,
   LineItem,
+  PricingMode,
   ScorecardAnswers,
+  UsageDistributionShape,
+  UsagePricingData,
 } from './types';
 import { uid } from './storage';
 
@@ -344,6 +347,71 @@ export function defaultDistribution(): DistributionData {
   };
 }
 
+export const PRICING_MODE_OPTIONS: { key: PricingMode; label: string; blurb: string }[] = [
+  {
+    key: 'flat-subscription',
+    label: 'Flat subscription',
+    blurb: 'Fixed price per customer per period (most SaaS, gym memberships).',
+  },
+  {
+    key: 'one-time',
+    label: 'One-time sale',
+    blurb: 'Customer pays once per purchase (e-commerce, info-products).',
+  },
+  {
+    key: 'usage',
+    label: 'Usage-based',
+    blurb: 'Charge per unit consumed (API calls, messages, GB processed). Whale-and-mouse dynamics.',
+  },
+  {
+    key: 'hybrid',
+    label: 'Hybrid (base + usage)',
+    blurb: 'Flat base fee plus usage on top. Common in modern infra SaaS.',
+  },
+  {
+    key: 'tiered',
+    label: 'Tiered plans (usage-gated)',
+    blurb: 'Plans defined by usage limits. Effectively usage pricing with guardrails.',
+  },
+];
+
+// Revenue share by decile (lowest → highest consumption). Sums to 1.0.
+export const DECILE_SHAPES: Record<UsageDistributionShape, number[]> = {
+  'flat':      [0.05, 0.07, 0.08, 0.09, 0.10, 0.10, 0.11, 0.12, 0.13, 0.15],
+  'moderate':  [0.02, 0.03, 0.04, 0.06, 0.07, 0.08, 0.10, 0.14, 0.18, 0.28],
+  'power-law': [0.005, 0.01, 0.02, 0.03, 0.04, 0.06, 0.08, 0.115, 0.18, 0.46],
+};
+
+export const DISTRIBUTION_SHAPE_LABEL: Record<UsageDistributionShape, string> = {
+  'flat': 'Flat — customers consume similarly (rare)',
+  'moderate': 'Moderate skew — top 20% drive ~half of revenue',
+  'power-law': 'Power-law — top 10% drive most of revenue (whale-and-mouse)',
+};
+
+export function defaultUsagePricing(): UsagePricingData {
+  return {
+    consumptionUnitLabel: 'API call',
+    pricePerConsumptionUnit: 0.01,
+    consumptionVariableCosts: [
+      { id: uid(), name: 'Upstream API / supplier cost', amount: 0.004, type: 'fixed', isThirdParty: true },
+      { id: uid(), name: 'Infrastructure / compute', amount: 0, type: 'fixed' },
+    ],
+    baseFee: 0,
+    averageUnitsPerCustomer: 1000,
+    distributionShape: 'power-law',
+    p25Units: 100,
+    p50Units: 400,
+    p75Units: 1500,
+    p90Units: 6000,
+    freeTierUnits: 500,
+    conversionRatePct: 3,
+    directCAC: 30,
+    monthlyChurnPct: 5,
+    nrrPct: 105,
+    customerLifetimeMonths: 0,
+  };
+}
+
 export function defaultIdeaFilter(): IdeaFilterData {
   return {
     problemStatement: '',
@@ -374,6 +442,7 @@ export function newAnalysis(name = 'New business'): BusinessAnalysis {
     description: '',
     pricingModel: PRICING_MODELS[0],
     industry: INDUSTRIES[0],
+    pricingMode: 'flat-subscription',
     unitDefinition: 'one sale',
     pricePerUnit: 100,
     unitsPerMonth: 50,
@@ -381,6 +450,7 @@ export function newAnalysis(name = 'New business'): BusinessAnalysis {
     fixedCosts: defaultFixedCosts(),
     setupCost: 0,
     cashReserve: 0,
+    usagePricing: defaultUsagePricing(),
     scorecard: defaultScorecard(),
     distribution: defaultDistribution(),
     ideaFilter: defaultIdeaFilter(),
@@ -441,4 +511,32 @@ export const TOOLTIPS: Record<string, string> = {
     'Have you compiled a list of at least 20 named prospects with contact info? If not, you are guessing at your market.',
   reachTestedOutreach:
     'Have you reached out — cold email, DM, conversation — and heard back? Plans to test do not count. Only actual tests.',
+  pricingMode:
+    'How you charge. Usage-based is powerful but fragile — a single whale customer can distort your whole P&L, and supplier costs can flip the unit economics overnight. Hybrid (base fee + usage) is usually safer.',
+  consumptionUnitLabel:
+    'The atomic unit you bill for — an API call, a message, a GB, a second of compute. Why it matters: your whole usage model is expressed per this unit. Rule of thumb: pick something the customer can actually observe and predict.',
+  pricePerConsumptionUnit:
+    'What you charge per consumption unit. Why it matters: the gap between this and your supplier cost is the only cushion you have. Rule of thumb: if your supplier raises prices, this must move — or margin evaporates.',
+  averageUnitsPerCustomer:
+    'Mean consumption units per paying customer per month. Warning: averages lie in usage pricing. A few whales pull the mean far above what most customers actually consume. Always check the percentile view below.',
+  distributionShape:
+    'How consumption is distributed across your customers. Power-law ("whale-and-mouse") means the top 10% drive most of revenue — one churn event can collapse the business. Flat distributions are rare and typically signal a capped product.',
+  percentileUnits:
+    'Consumption at p25/p50/p75/p90 of your customer base. Why it matters: the p25 customer might be unprofitable even if the average is healthy. If p25 contribution is negative, you are subsidising low-usage customers with high-usage ones.',
+  freeTierUnits:
+    'Average consumption units a free user burns per month. Why it matters: every free user costs you real money (supplier calls, compute). Free-tier drag is the hidden tax on your CAC. Rule of thumb: multiply this cost by 1/conversion-rate to see what each paying customer actually funds.',
+  conversionRatePct:
+    'Percentage of free users who convert to paid. Why it matters: it determines how many free users each paying customer subsidises. At 1% conversion, every paying customer pays for 100 freeloaders. Most consumer SaaS sees 1–5%; prosumer 5–15%.',
+  directCAC:
+    'Direct cash spent on ads, sales, or outbound per paying customer — before any free-tier drag. Why it matters: this is what the "LTV > 3× CAC" rule-of-thumb traditionally compares against. But in usage pricing, the real CAC is higher because of free-tier costs.',
+  trueCAC:
+    'Direct CAC + (free-tier units × variable cost × 1/conversion). Why it matters: this is the number the business actually pays to acquire one paying customer. Benchmark LTV against True CAC, not direct CAC. Rule of thumb: LTV:True-CAC < 3 is fragile; < 1.5 is broken.',
+  monthlyChurnPct:
+    'Percentage of paying customers who leave each month. Why it matters: churn sets the ceiling on lifetime. 5%/month = ~20-month lifetime; 10%/month = ~10 months. Rule of thumb: SaaS > 5%/mo monthly churn is concerning; > 10%/mo is usually terminal.',
+  nrrPct:
+    'Net Revenue Retention — revenue from a cohort one year later, including expansion and contraction but excluding new customers. Why it matters: 120%+ means the business grows even if you stop acquiring. Below 90% means you are running uphill on a broken escalator. Best-in-class SaaS: 120–140%.',
+  baseFee:
+    'Flat monthly fee charged on top of usage (hybrid model). Why it matters: the base fee covers your cost to serve low-usage customers and dampens whale-dependence. Rule of thumb: set it high enough that even a p25 customer is profitable.',
+  supplierDependency:
+    'Share of your variable cost that comes from a third-party (upstream APIs, infrastructure vendors). Why it matters: if this is > 50%, a supplier price hike or outage can crush your margin overnight. Rule of thumb: diversify or negotiate volume contracts above 40%.',
 };

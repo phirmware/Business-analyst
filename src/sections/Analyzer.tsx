@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef } from 'react';
-import type { BusinessAnalysis, CostType, FixedItem, LineItem } from '../types';
+import type { BusinessAnalysis, CostType, FixedItem, LineItem, PricingMode } from '../types';
 import {
   calcUnitEconomics,
   formatGBP,
@@ -8,8 +8,10 @@ import {
   healthContribution,
   healthProfit,
   healthSafety,
+  isUsageMode,
 } from '../calculations';
-import { INDUSTRIES, PRICING_MODELS, TOOLTIPS } from '../constants';
+import { INDUSTRIES, PRICING_MODE_OPTIONS, PRICING_MODELS, TOOLTIPS } from '../constants';
+import { UsagePricingHealth, UsagePricingInputs } from './UsagePricing';
 import { uid } from '../storage';
 import { exportAnalysisMarkdown, downloadPdf } from '../export';
 import {
@@ -53,6 +55,7 @@ export function Analyzer({
   autoFocusName?: boolean;
 }) {
   const ue = useMemo(() => calcUnitEconomics(analysis), [analysis]);
+  const usageMode = isUsageMode(analysis);
   const nameRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
@@ -126,7 +129,7 @@ export function Analyzer({
 
       {/* Context */}
       <Card title="Business context">
-        <div className="grid md:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <Field label="One-line description">
             <TextInput
               value={analysis.description}
@@ -151,9 +154,41 @@ export function Analyzer({
         </div>
       </Card>
 
-      {/* Revenue per unit */}
+      {/* Pricing mode selector */}
+      <Card title="How do you charge?">
+        <div className="mb-3 text-xs text-slate-500 dark:text-slate-400 flex items-start">
+          <span>
+            Flat pricing uses simple per-unit economics. Usage pricing adds whale-and-mouse risk, free-tier drag, and supplier dependency — we model those separately.
+          </span>
+          <Tooltip text={TOOLTIPS.pricingMode} />
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2">
+          {PRICING_MODE_OPTIONS.map((opt) => {
+            const selected = analysis.pricingMode === opt.key;
+            return (
+              <button
+                key={opt.key}
+                type="button"
+                onClick={() => onChange({ pricingMode: opt.key as PricingMode })}
+                className={`text-left rounded-md border p-3 transition ${
+                  selected
+                    ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-900/30'
+                    : 'border-slate-200 dark:border-slate-800 hover:border-slate-400 dark:hover:border-slate-600'
+                }`}
+              >
+                <div className="text-sm font-semibold">{opt.label}</div>
+                <div className="text-xs text-slate-500 dark:text-slate-400 mt-1">{opt.blurb}</div>
+              </button>
+            );
+          })}
+        </div>
+      </Card>
+
+      {/* Revenue per unit (flat-pricing) */}
+      {!usageMode && (
+      <>
       <Card title="Revenue per unit">
-        <div className="grid md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <Field label="Price charged per unit (£)" tooltip={TOOLTIPS.pricePerUnit}>
             <NumberInput
               value={analysis.pricePerUnit}
@@ -209,6 +244,32 @@ export function Analyzer({
           </span>
         </div>
       </Card>
+      </>
+      )}
+
+      {/* Usage-mode inputs */}
+      {usageMode && (
+        <>
+          <Card title="Paying customers">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <Field label="Paying customers / month" tooltip={TOOLTIPS.unitsPerMonth}>
+                <NumberInput
+                  value={analysis.unitsPerMonth}
+                  onChange={(v) => onChange({ unitsPerMonth: v })}
+                />
+              </Field>
+              <Field label='Unit label (for chat context)' tooltip={TOOLTIPS.unitDefinition}>
+                <TextInput
+                  value={analysis.unitDefinition}
+                  onChange={(v) => onChange({ unitDefinition: v })}
+                  placeholder="one customer / one account"
+                />
+              </Field>
+            </div>
+          </Card>
+          <UsagePricingInputs analysis={analysis} onChange={onChange} />
+        </>
+      )}
 
       {/* Fixed */}
       <Card
@@ -243,7 +304,7 @@ export function Analyzer({
       </Card>
 
       <Card title="Setup & cash">
-        <div className="grid md:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <Field label="Setup cost, one-time (£)" tooltip={TOOLTIPS.setupCost}>
             <NumberInput
               value={analysis.setupCost}
@@ -259,8 +320,13 @@ export function Analyzer({
         </div>
       </Card>
 
-      {/* Key metrics */}
-      <div className="grid md:grid-cols-4 gap-4">
+      {/* Usage mode outputs */}
+      {usageMode && <UsagePricingHealth analysis={analysis} />}
+
+      {/* Key metrics — flat mode only */}
+      {!usageMode && (
+      <>
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <Card>
           <Metric
             label="Contribution margin"
@@ -303,7 +369,7 @@ export function Analyzer({
         </Card>
       </div>
 
-      <div className="grid md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <Card>
           <Metric
             label="Gross margin"
@@ -357,7 +423,7 @@ export function Analyzer({
       <UnitEconomicsCard analysis={analysis} />
 
       {/* Charts */}
-      <div className="grid md:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <Card title="Cost breakdown (monthly)">
           <CostDonut
             variable={ue.totalVariableCosts}
@@ -382,6 +448,8 @@ export function Analyzer({
           breakeven={ue.breakevenUnits}
         />
       </Card>
+      </>
+      )}
     </div>
   );
 }

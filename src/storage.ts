@@ -4,6 +4,7 @@ import type {
   BusinessAnalysis,
   DistributionData,
   IdeaFilterData,
+  UsagePricingData,
 } from './types';
 
 const ANALYSES_KEY = 'brc.analyses.v1';
@@ -54,6 +55,25 @@ const DEFAULT_DISTRIBUTION: DistributionData = {
   notes: '',
 };
 
+const DEFAULT_USAGE_PRICING: UsagePricingData = {
+  consumptionUnitLabel: 'API call',
+  pricePerConsumptionUnit: 0.01,
+  consumptionVariableCosts: [],
+  baseFee: 0,
+  averageUnitsPerCustomer: 1000,
+  distributionShape: 'power-law',
+  p25Units: 100,
+  p50Units: 400,
+  p75Units: 1500,
+  p90Units: 6000,
+  freeTierUnits: 500,
+  conversionRatePct: 3,
+  directCAC: 30,
+  monthlyChurnPct: 5,
+  nrrPct: 105,
+  customerLifetimeMonths: 0,
+};
+
 const DEFAULT_IDEA_FILTER: IdeaFilterData = {
   problemStatement: '',
   problemAcute: '',
@@ -75,6 +95,8 @@ const DEFAULT_IDEA_FILTER: IdeaFilterData = {
 function hydrate(a: BusinessAnalysis): BusinessAnalysis {
   return {
     ...a,
+    pricingMode: a.pricingMode ?? 'flat-subscription',
+    usagePricing: { ...DEFAULT_USAGE_PRICING, ...(a.usagePricing ?? {}) },
     distribution: { ...DEFAULT_DISTRIBUTION, ...(a.distribution ?? {}) },
     ideaFilter: { ...DEFAULT_IDEA_FILTER, ...(a.ideaFilter ?? {}) },
     scorecard: { ...a.scorecard, q5Notes: a.scorecard?.q5Notes ?? '' },

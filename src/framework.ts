@@ -62,6 +62,19 @@ A good business survives the skeptical-investor test: revenue -40%, costs +30%. 
 - 10-20% margin when perfect, negative when anything goes wrong
 - The people who make real money own the property. Without the asset, you are a low-margin middleman.
 
+### 8. Usage-based pricing (apply when the user is in usage, hybrid, or tiered mode)
+Usage pricing adds failure modes that flat pricing never has. When the user's analysis is in a usage mode:
+
+- Averages lie. Never reason from mean usage alone. Ask about the distribution: p25, p50, p75, p90. If p25 contribution is negative, low-usage customers lose money — the business is subsidising minnows with whales.
+- True CAC, not direct CAC. Real CAC = direct CAC + (free-tier units × variable cost per unit × 1 / conversion rate). A "£30 CAC" can actually be £100+ once free-tier drag is priced in. Benchmark LTV against True CAC; LTV:True-CAC ≥ 3 is healthy, < 1.5 is broken.
+- Concentration is existential. If the top 10% of customers drive >55% of revenue, one churn event can sink the quarter. Push back with "what if your biggest customer leaves next week?"
+- Supplier dependency. If >50% of per-unit variable cost is a single third-party (OpenAI, AWS, Twilio, Stripe), the user is a wrapper — a price-taker twice over. Upstream can raise prices, obsolete the feature, or take the customer. Ask what defensible value is added.
+- NRR is the silent lever. Best-in-class >120% means the cohort grows without acquisition. <90% means contraction — new logos just fill a leakier bucket. NRR below 100 is a structural problem, not a marketing problem.
+- Prefer hybrid. If p25 is loss-making, recommend a base fee sized to cover p25 variable cost + a share of fixed. Pure usage usually needs one.
+- Wrapper diagnosis. "An AI-wrapper that calls GPT and marks it up" is a pricing arbitrage that closes. Defensible usage businesses own workflow, proprietary data, multi-model routing, or regulated distribution.
+
+When the user's analysis is in usage/hybrid/tiered mode, the chat summary includes a "Usage pricing:" block with consumption price, variable cost, supplier dependency, True CAC, LTV, LTV:True-CAC, NRR, top-10% concentration, and p25 contribution. Use those numbers directly; do not ask the user for them again.
+
 ### Hard truths
 - Most businesses fail because of the model, not execution.
 - Picking the right business is 80% of the outcome.
@@ -77,8 +90,8 @@ A good business survives the skeptical-investor test: revenue -40%, costs +30%. 
 - End with the 2-3 most important actions for the user to take.`;
 
 import type { BusinessAnalysis } from './types';
-import { calcUnitEconomics } from './calculations';
-import { DISTRIBUTION_STRATEGIES } from './constants';
+import { calcUnitEconomics, calcUsageEconomics, isUsageMode } from './calculations';
+import { DISTRIBUTION_STRATEGIES, PRICING_MODE_OPTIONS } from './constants';
 
 export function summarizeAnalysisForChat(a: BusinessAnalysis): string {
   const ue = calcUnitEconomics(a);
@@ -95,14 +108,18 @@ export function summarizeAnalysisForChat(a: BusinessAnalysis): string {
       : d.estimatedCAC > 0
       ? `£${d.estimatedCAC} (contribution ≤ 0 — cannot recover)`
       : '(not estimated)';
+  const modeLabel =
+    PRICING_MODE_OPTIONS.find((p) => p.key === a.pricingMode)?.label || a.pricingMode;
+  const usageBlock = isUsageMode(a) ? usagePricingSummary(a) : null;
   return [
     `Business: ${a.name}`,
     `Description: ${a.description || '(none)'}`,
     `Industry: ${a.industry}`,
     `Pricing model: ${a.pricingModel}`,
+    `Pricing mode: ${modeLabel}`,
     `Unit: ${a.unitDefinition}`,
     `Price per unit: £${a.pricePerUnit}`,
-    `Units per month: ${a.unitsPerMonth}`,
+    isUsageMode(a) ? `Paying customers / month: ${a.unitsPerMonth}` : `Units per month: ${a.unitsPerMonth}`,
     `Setup cost: £${a.setupCost}`,
     `Cash reserve: £${a.cashReserve}`,
     ``,
@@ -119,6 +136,7 @@ export function summarizeAnalysisForChat(a: BusinessAnalysis): string {
     `- Monthly profit: £${ue.monthlyProfit.toFixed(0)}`,
     `- Annual profit: £${ue.annualProfit.toFixed(0)}`,
     `- Safety margin vs breakeven: ${isFinite(ue.safetyMarginPct) ? ue.safetyMarginPct.toFixed(1) + '%' : 'N/A'}`,
+    ...(usageBlock ? ['', 'Usage pricing:', usageBlock] : []),
     ``,
     `Distribution plan:`,
     `- Primary channel: ${strategyLabel(d.primaryStrategyKey)}`,
@@ -139,4 +157,31 @@ export function summarizeAnalysisForChat(a: BusinessAnalysis): string {
 
 function yn(v: string): string {
   return v === '' ? '(unanswered)' : v;
+}
+
+function usagePricingSummary(a: BusinessAnalysis): string {
+  const u = a.usagePricing;
+  const ue = calcUsageEconomics(a);
+  const unit = u.consumptionUnitLabel || 'unit';
+  const third = u.consumptionVariableCosts
+    .filter((c) => c.isThirdParty)
+    .map((c) => `${c.name} (${c.type === 'percent' ? c.amount + '%' : '£' + c.amount})`)
+    .join(', ');
+  const ltvCac = isFinite(ue.ltvToCacRatio) ? `${ue.ltvToCacRatio.toFixed(1)}x` : 'infinite (True CAC = 0)';
+  return [
+    `- Consumption unit: ${unit}`,
+    `- Price per ${unit}: £${u.pricePerConsumptionUnit}`,
+    `- Variable cost per ${unit}: £${ue.variableCostPerConsumptionUnit.toFixed(4)} (third-party: £${ue.thirdPartyCostPerConsumptionUnit.toFixed(4)}${third ? ' — ' + third : ''})`,
+    `- Per-unit margin: ${ue.consumptionMarginPct.toFixed(1)}%`,
+    `- Monthly base fee: £${u.baseFee}`,
+    `- Avg ${unit}/customer/mo: ${u.averageUnitsPerCustomer}  (p25 ${u.p25Units} / p50 ${u.p50Units} / p75 ${u.p75Units} / p90 ${u.p90Units})`,
+    `- p25 / p50 / p75 / p90 contribution (£/mo): ${ue.p25Contribution.toFixed(0)} / ${ue.p50Contribution.toFixed(0)} / ${ue.p75Contribution.toFixed(0)} / ${ue.p90Contribution.toFixed(0)}`,
+    `- Distribution shape: ${u.distributionShape} (top 10% = ${ue.top10PctShare.toFixed(1)}% of revenue, top 20% = ${ue.top20PctShare.toFixed(1)}%)`,
+    `- Supplier dependency: ${ue.supplierDependencyPct.toFixed(1)}% of per-unit cost is third-party`,
+    `- Free tier: ${u.freeTierUnits} ${unit}/user/mo at ${u.conversionRatePct}% conversion`,
+    `- Direct CAC: £${u.directCAC}  |  Free-tier drag: £${ue.freeTierDragPerPaying.toFixed(2)}  |  True CAC: £${ue.trueCAC.toFixed(2)}`,
+    `- Monthly churn: ${u.monthlyChurnPct}%  |  NRR: ${u.nrrPct}%  |  Effective lifetime: ${ue.effectiveLifetimeMonths.toFixed(1)} mo`,
+    `- LTV: £${ue.ltv.toFixed(0)}  |  LTV:True-CAC: ${ltvCac}  |  Payback: ${isFinite(ue.paybackMonths) ? ue.paybackMonths.toFixed(1) + ' mo' : 'never'}`,
+    `- Monthly profit (usage): £${ue.monthlyProfit.toFixed(0)}  |  Annual: £${ue.annualProfit.toFixed(0)}`,
+  ].join('\n');
 }

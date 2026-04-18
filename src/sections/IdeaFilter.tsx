@@ -58,7 +58,7 @@ export function IdeaFilter({
             placeholder="e.g. Small landlords lose 2-3 days of rent every handover"
           />
         </Field>
-        <div className="grid md:grid-cols-3 gap-3 mt-4">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mt-4">
           <YesNoField
             label="Acute?"
             tooltip={TOOLTIPS.problemAcute}
@@ -78,7 +78,7 @@ export function IdeaFilter({
             onChange={(v) => update({ problemExpensive: v })}
           />
         </div>
-        <div className="grid md:grid-cols-2 gap-3 mt-3">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3">
           <Field
             label="Annual cost of the problem to one customer (£)"
             tooltip={TOOLTIPS.problemAnnualCost}
@@ -107,7 +107,7 @@ export function IdeaFilter({
           "That's a great idea, I'd use it" is not willingness to pay. Money or a price
           attached to a commitment is.
         </p>
-        <div className="grid md:grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           <YesNoField
             label="Precedent — are they already paying something to manage this?"
             tooltip={TOOLTIPS.wtpPrecedent}
@@ -121,7 +121,7 @@ export function IdeaFilter({
             onChange={(v) => update({ wtpCommitment: v })}
           />
         </div>
-        <div className="grid md:grid-cols-2 gap-3 mt-3">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3">
           <Field label="Price at least one prospect named (£)" tooltip={TOOLTIPS.wtpPrice}>
             <NumberInput
               value={f.wtpPrice}
@@ -148,7 +148,7 @@ export function IdeaFilter({
           A real channel, a real list, a real outreach test. "Run some ads" is not a
           reachability plan.
         </p>
-        <div className="grid md:grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
           <YesNoField
             label="Can you name 3+ places they spend time?"
             tooltip={TOOLTIPS.reachCanName}
@@ -168,7 +168,7 @@ export function IdeaFilter({
             onChange={(v) => update({ reachTestedOutreach: v })}
           />
         </div>
-        <div className="grid md:grid-cols-2 gap-3 mt-3">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3">
           <Field label="Channels you believe work (comma-separated)">
             <TextInput
               value={f.reachChannels}

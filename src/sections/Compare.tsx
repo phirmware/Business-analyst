@@ -37,7 +37,7 @@ export function Compare({ analyses }: { analyses: BusinessAnalysis[] }) {
       )}
 
       {analyses.length >= 2 && (
-        <div className="grid md:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <Card title="Business A">
             <select
               className={inputClass}

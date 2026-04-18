@@ -2,8 +2,10 @@ import { useMemo } from 'react';
 import type { BusinessAnalysis, ScorecardAnswers } from '../types';
 import {
   calcUnitEconomics,
+  calcUsageEconomics,
   formatGBP,
   formatPct,
+  isUsageMode,
   type Health,
 } from '../calculations';
 import { DISTRIBUTION_STRATEGIES, MOATS } from '../constants';
@@ -76,7 +78,7 @@ export function Scorecard({
           Do the per-unit numbers actually work, and are they based on real research — not
           optimism?
         </p>
-        <div className="grid md:grid-cols-3 gap-4 mb-4 font-mono text-sm">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4 font-mono text-sm">
           <div>
             <div className="text-xs uppercase text-slate-500">Contribution</div>
             <div>{formatGBP(ue.contributionPerUnit)} ({formatPct(ue.contributionMarginPct)})</div>
@@ -108,6 +110,7 @@ export function Scorecard({
             placeholder="e.g. competitor pricing pages, industry reports, user interviews"
           />
         </Field>
+        {isUsageMode(analysis) && <UsageQ1SubScores analysis={analysis} />}
       </Card>
 
       {/* Q2 */}
@@ -118,7 +121,7 @@ export function Scorecard({
         <p className="text-sm text-slate-600 dark:text-slate-300 mb-3">
           What protects your margins from being competed away?
         </p>
-        <div className="grid md:grid-cols-2 gap-2 mb-3">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-2 mb-3">
           {MOATS.map((m) => {
             const checked = s.q2Moats.includes(m.key);
             const isNone = m.key === 'none';
@@ -172,7 +175,7 @@ export function Scorecard({
         title="Q3 · Pricing power"
         right={<HealthBadge health={score.q3} label={healthLabel(score.q3)} />}
       >
-        <div className="grid md:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <Field label="Can you raise prices 10% without losing most customers?">
             <Select
               value={s.q3RaisePrice || 'unsure'}
@@ -197,6 +200,7 @@ export function Scorecard({
             />
           </Field>
         </div>
+        {isUsageMode(analysis) && <UsageQ3SubScores analysis={analysis} />}
       </Card>
 
       {/* Q4 */}
@@ -215,7 +219,7 @@ export function Scorecard({
           </strong>
           .
         </div>
-        <div className="grid md:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <Field label="Total runway (months of cash)">
             <NumberInput
               value={s.q4Runway}
@@ -223,7 +227,7 @@ export function Scorecard({
             />
           </Field>
         </div>
-        <div className="mt-3 grid md:grid-cols-2 gap-4">
+        <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-4">
           <Field label="Regulatory risks that could kill this">
             <TextInput
               value={s.q4Regulatory}
@@ -238,6 +242,7 @@ export function Scorecard({
             />
           </Field>
         </div>
+        {isUsageMode(analysis) && <UsageQ4SubScores analysis={analysis} />}
       </Card>
 
       {/* Q5 */}
@@ -297,7 +302,7 @@ function DistributionSubScores({ analysis }: { analysis: BusinessAnalysis }) {
     },
   ];
   return (
-    <div className="grid md:grid-cols-3 gap-2">
+    <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
       {rows.map((r) => (
         <div
           key={r.label}
@@ -316,6 +321,110 @@ function DistributionSubScores({ analysis }: { analysis: BusinessAnalysis }) {
   );
 }
 
+function UsageQ1SubScores({ analysis }: { analysis: BusinessAnalysis }) {
+  const ue = calcUsageEconomics(analysis);
+  const rows: { label: string; met: Health; detail: string }[] = [
+    {
+      label: 'LTV : True-CAC ≥ 3×',
+      met: ue.ltvToCacRatio >= 3 ? 'healthy' : ue.ltvToCacRatio >= 1.5 ? 'caution' : 'danger',
+      detail: isFinite(ue.ltvToCacRatio)
+        ? `${ue.ltvToCacRatio.toFixed(1)}× (LTV ${formatGBP(ue.ltv)} / True CAC ${formatGBP(ue.trueCAC)})`
+        : 'True CAC is 0 — set up acquisition cost',
+    },
+    {
+      label: 'Per-unit margin ≥ 15%',
+      met: ue.consumptionMarginPct >= 40 ? 'healthy' : ue.consumptionMarginPct >= 15 ? 'caution' : 'danger',
+      detail: `${formatPct(ue.consumptionMarginPct)} contribution on each ${analysis.usagePricing.consumptionUnitLabel}`,
+    },
+    {
+      label: 'p25 customer is profitable',
+      met: ue.p25Contribution > 0 ? 'healthy' : ue.p25Contribution === 0 ? 'caution' : 'danger',
+      detail: `${formatGBP(ue.p25Contribution)}/mo — ${ue.p25Contribution < 0 ? 'low-usage customers lose money' : 'low-usage customers pay their way'}`,
+    },
+  ];
+  return (
+    <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-2">
+      {rows.map((r) => (
+        <div
+          key={r.label}
+          className="rounded-md border border-slate-200 dark:border-slate-800 p-2.5"
+        >
+          <div className="flex items-start justify-between gap-2">
+            <div className="text-xs font-medium">{r.label}</div>
+            <HealthBadge health={r.met} label={healthLabel(r.met)} />
+          </div>
+          <div className="text-xs text-slate-500 mt-1">{r.detail}</div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function UsageQ3SubScores({ analysis }: { analysis: BusinessAnalysis }) {
+  const ue = calcUsageEconomics(analysis);
+  const supplierHealth: Health =
+    ue.supplierDependencyPct < 40 ? 'healthy' : ue.supplierDependencyPct < 70 ? 'caution' : 'danger';
+  return (
+    <div className="mt-4 grid grid-cols-1 gap-2">
+      <div className="rounded-md border border-slate-200 dark:border-slate-800 p-2.5">
+        <div className="flex items-start justify-between gap-2">
+          <div className="text-xs font-medium">Supplier dependency</div>
+          <HealthBadge health={supplierHealth} label={healthLabel(supplierHealth)} />
+        </div>
+        <div className="text-xs text-slate-500 mt-1">
+          {formatPct(ue.supplierDependencyPct)} of per-unit cost is third-party. Above 50%, a supplier price hike directly compresses your margin — real pricing power requires controlling your cost base.
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function UsageQ4SubScores({ analysis }: { analysis: BusinessAnalysis }) {
+  const ue = calcUsageEconomics(analysis);
+  const nrrHealth: Health =
+    analysis.usagePricing.nrrPct >= 110
+      ? 'healthy'
+      : analysis.usagePricing.nrrPct >= 100
+      ? 'caution'
+      : 'danger';
+  const concentrationHealth: Health =
+    ue.top10PctShare < 35 ? 'healthy' : ue.top10PctShare < 55 ? 'caution' : 'danger';
+  const rows = [
+    {
+      label: 'NRR ≥ 100%',
+      met: nrrHealth,
+      detail: `Current NRR ${analysis.usagePricing.nrrPct}% — ${
+        analysis.usagePricing.nrrPct >= 100
+          ? 'expanding or flat'
+          : 'contracting; every month you are running uphill'
+      }`,
+    },
+    {
+      label: 'Revenue not concentrated in top 10%',
+      met: concentrationHealth,
+      detail: `Top decile = ${formatPct(ue.top10PctShare)} of revenue${
+        ue.top10PctShare >= 55 ? ' — one whale exit crushes you' : ''
+      }`,
+    },
+  ];
+  return (
+    <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-2">
+      {rows.map((r) => (
+        <div
+          key={r.label}
+          className="rounded-md border border-slate-200 dark:border-slate-800 p-2.5"
+        >
+          <div className="flex items-start justify-between gap-2">
+            <div className="text-xs font-medium">{r.label}</div>
+            <HealthBadge health={r.met} label={healthLabel(r.met)} />
+          </div>
+          <div className="text-xs text-slate-500 mt-1">{r.detail}</div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function computeScore(a: BusinessAnalysis): Score {
   const ue = calcUnitEconomics(a);
   const s = a.scorecard;
@@ -326,6 +435,15 @@ function computeScore(a: BusinessAnalysis): Score {
   if (ue.contributionMarginPct >= 30 && s.q1Validated) q1 = 'healthy';
   else if (ue.contributionMarginPct >= 10 || s.q1Validated) q1 = 'caution';
   else q1 = 'danger';
+  // Usage-mode extension: downgrade Q1 if LTV:CAC or p25 is broken
+  if (isUsageMode(a)) {
+    const uu = calcUsageEconomics(a);
+    if (uu.ltvToCacRatio < 1.5 || uu.p25Contribution < 0 || uu.consumptionMarginPct < 10) {
+      q1 = 'danger';
+    } else if (uu.ltvToCacRatio < 3 || uu.consumptionMarginPct < 30) {
+      q1 = q1 === 'healthy' ? 'caution' : q1;
+    }
+  }
 
   // Q2: moat
   let q2: Health;
@@ -340,6 +458,12 @@ function computeScore(a: BusinessAnalysis): Score {
   else if (s.q3RaisePrice === 'yes' && s.q3MakerTaker === 'maker' && s.q3Undercut.trim().length >= 20)
     q3 = 'healthy';
   else q3 = 'caution';
+  // Usage-mode extension: heavy supplier dependency compresses real pricing power
+  if (isUsageMode(a)) {
+    const uu = calcUsageEconomics(a);
+    if (uu.supplierDependencyPct >= 70) q3 = 'danger';
+    else if (uu.supplierDependencyPct >= 50 && q3 === 'healthy') q3 = 'caution';
+  }
 
   // Q4: downside
   const survives30 = ue.monthlyProfit >= 0 || s.q4Runway >= 6;
@@ -347,6 +471,14 @@ function computeScore(a: BusinessAnalysis): Score {
   if (s.q4Runway >= 12 && survives30) q4 = 'healthy';
   else if (s.q4Runway >= 6 || survives30) q4 = 'caution';
   else q4 = 'danger';
+  // Usage-mode extension: NRR < 100 or heavy concentration adds downside risk
+  if (isUsageMode(a)) {
+    const uu = calcUsageEconomics(a);
+    if (a.usagePricing.nrrPct < 90 || uu.top10PctShare >= 55) q4 = 'danger';
+    else if ((a.usagePricing.nrrPct < 100 || uu.top10PctShare >= 40) && q4 === 'healthy') {
+      q4 = 'caution';
+    }
+  }
 
   // Q5: distribution reality (auto-scored from distribution data)
   const channelNamed = !!d.primaryStrategyKey;
@@ -459,7 +591,7 @@ function FinalVerdict({
         <ScorePill label="Q5 Distribution" health={score.q5} />
       </div>
       {(issues.length > 0 || recs.length > 0) && (
-        <div className="grid md:grid-cols-2 gap-4 mt-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
           <div>
             <div className="text-xs uppercase tracking-wide text-slate-500 mb-1">What's broken</div>
             <ul className="list-disc ml-5 text-sm space-y-1">

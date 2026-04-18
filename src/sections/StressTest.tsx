@@ -2,11 +2,13 @@ import { useMemo, useState } from 'react';
 import type { BusinessAnalysis } from '../types';
 import {
   calcUnitEconomics,
+  calcUsageEconomics,
   formatGBP,
   formatNum,
   formatPct,
   healthContribution,
   healthProfit,
+  isUsageMode,
   type Variances,
   zeroVariances,
 } from '../calculations';
@@ -18,6 +20,100 @@ interface Scenario {
   description: string;
   variances: Variances;
 }
+
+interface UsageScenario {
+  key: string;
+  label: string;
+  description: string;
+  apply: (a: BusinessAnalysis) => BusinessAnalysis;
+}
+
+function deepCopyAnalysis(a: BusinessAnalysis): BusinessAnalysis {
+  return {
+    ...a,
+    variableCosts: a.variableCosts.map((v) => ({ ...v })),
+    fixedCosts: a.fixedCosts.map((f) => ({ ...f })),
+    usagePricing: {
+      ...a.usagePricing,
+      consumptionVariableCosts: a.usagePricing.consumptionVariableCosts.map((v) => ({ ...v })),
+    },
+  };
+}
+
+const USAGE_SCENARIOS: UsageScenario[] = [
+  {
+    key: 'usage-base',
+    label: 'Base case',
+    description: 'Your usage inputs as entered.',
+    apply: (a) => a,
+  },
+  {
+    key: 'top-whale-leaves',
+    label: 'Top customer leaves',
+    description: 'Your biggest whale churns. Revenue collapses by the top-1% share of the decile curve.',
+    apply: (a) => {
+      const ue = calcUsageEconomics(a);
+      // top 1% ≈ ~40% of top decile for power-law, ~20% for moderate, ~10% for flat
+      const factor = a.usagePricing.distributionShape === 'power-law' ? 0.4 : a.usagePricing.distributionShape === 'moderate' ? 0.2 : 0.1;
+      const top1Share = (ue.top10PctShare / 100) * factor;
+      const next = deepCopyAnalysis(a);
+      next.usagePricing.averageUnitsPerCustomer = Math.max(
+        0,
+        next.usagePricing.averageUnitsPerCustomer * (1 - top1Share)
+      );
+      return next;
+    },
+  },
+  {
+    key: 'top-decile-churns',
+    label: 'Top 10% churn',
+    description: 'Whole top decile of customers leaves. Revenue falls by top-10% share.',
+    apply: (a) => {
+      const ue = calcUsageEconomics(a);
+      const shareLost = ue.top10PctShare / 100;
+      const next = deepCopyAnalysis(a);
+      next.usagePricing.averageUnitsPerCustomer = Math.max(
+        0,
+        next.usagePricing.averageUnitsPerCustomer * (1 - shareLost)
+      );
+      // Also shrink paying customer count by ~10%
+      next.unitsPerMonth = Math.max(0, next.unitsPerMonth * 0.9);
+      return next;
+    },
+  },
+  {
+    key: 'supplier-shock',
+    label: 'Supplier shock +40%',
+    description: 'Third-party supplier raises prices 40%. Only flagged 3rd-party costs move.',
+    apply: (a) => {
+      const next = deepCopyAnalysis(a);
+      next.usagePricing.consumptionVariableCosts = next.usagePricing.consumptionVariableCosts.map((c) =>
+        c.isThirdParty ? { ...c, amount: c.amount * 1.4 } : c
+      );
+      return next;
+    },
+  },
+  {
+    key: 'free-tier-abuse',
+    label: 'Conversion halved',
+    description: 'Free-tier converts at half the current rate. True CAC explodes.',
+    apply: (a) => {
+      const next = deepCopyAnalysis(a);
+      next.usagePricing.conversionRatePct = Math.max(0.1, next.usagePricing.conversionRatePct / 2);
+      return next;
+    },
+  },
+  {
+    key: 'nrr-flips',
+    label: 'NRR flips to 85%',
+    description: 'Expansion stalls and contraction kicks in. LTV compresses.',
+    apply: (a) => {
+      const next = deepCopyAnalysis(a);
+      next.usagePricing.nrrPct = 85;
+      return next;
+    },
+  },
+];
 
 const SCENARIOS: Scenario[] = [
   {
@@ -73,6 +169,7 @@ const SCENARIOS: Scenario[] = [
 export function StressTest({ analysis }: { analysis: BusinessAnalysis }) {
   const [v, setV] = useState<Variances>(zeroVariances);
   const [monthsMultiplier, setMonthsMultiplier] = useState(1);
+  const usageMode = isUsageMode(analysis);
 
   const base = useMemo(() => calcUnitEconomics(analysis), [analysis]);
   const stressed = useMemo(() => calcUnitEconomics(analysis, v), [analysis, v]);
@@ -110,7 +207,7 @@ export function StressTest({ analysis }: { analysis: BusinessAnalysis }) {
       </div>
 
       <Card title="Scenarios">
-        <div className="grid md:grid-cols-4 sm:grid-cols-2 gap-2">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2">
           {SCENARIOS.map((s) => (
             <button
               key={s.key}
@@ -125,7 +222,7 @@ export function StressTest({ analysis }: { analysis: BusinessAnalysis }) {
       </Card>
 
       <Card title="Sliders">
-        <div className="grid md:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <Slider
             label="Revenue per unit"
             min={-50}
@@ -162,7 +259,7 @@ export function StressTest({ analysis }: { analysis: BusinessAnalysis }) {
         </div>
       </Card>
 
-      <div className="grid md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <Card>
           <Metric
             label="Contribution margin"
@@ -232,7 +329,9 @@ export function StressTest({ analysis }: { analysis: BusinessAnalysis }) {
         })()}
       </Card>
 
-      <Card title="Survival matrix">
+      {usageMode && <UsageSurvivalMatrix analysis={analysis} />}
+
+      <Card title="Survival matrix (flat pricing)">
         <div className="overflow-x-auto -mx-5 px-5">
           <table className="w-full text-sm">
             <thead className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">
@@ -301,6 +400,80 @@ export function StressTest({ analysis }: { analysis: BusinessAnalysis }) {
         </div>
       </Card>
     </div>
+  );
+}
+
+function UsageSurvivalMatrix({ analysis }: { analysis: BusinessAnalysis }) {
+  return (
+    <Card title="Usage-mode survival matrix">
+      <div className="mb-3 text-xs text-slate-500 dark:text-slate-400">
+        Usage-specific failure modes: whale churn, supplier shocks, free-tier abuse, NRR collapse. Verdict uses LTV:True-CAC ≥ 1.5 as minimum viability.
+      </div>
+      <div className="overflow-x-auto -mx-5 px-5">
+        <table className="w-full text-sm">
+          <thead className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">
+            <tr>
+              <th className="text-left py-2 pr-4">Scenario</th>
+              <th className="text-right py-2 pr-4">Monthly profit</th>
+              <th className="text-right py-2 pr-4">True CAC</th>
+              <th className="text-right py-2 pr-4">LTV</th>
+              <th className="text-right py-2 pr-4">LTV:CAC</th>
+              <th className="text-left py-2">Verdict</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+            {USAGE_SCENARIOS.map((s) => {
+              const modified = s.apply(analysis);
+              const ue = calcUsageEconomics(modified);
+              const survives =
+                ue.monthlyProfit >= 0 && isFinite(ue.ltvToCacRatio) && ue.ltvToCacRatio >= 1.5;
+              const fragile =
+                ue.monthlyProfit >= 0 || (isFinite(ue.ltvToCacRatio) && ue.ltvToCacRatio >= 1);
+              const kind: 'healthy' | 'caution' | 'danger' = survives
+                ? 'healthy'
+                : fragile
+                ? 'caution'
+                : 'danger';
+              const label = survives ? 'Survives' : fragile ? 'Fragile' : 'Breaks';
+              const ratio = isFinite(ue.ltvToCacRatio)
+                ? `${ue.ltvToCacRatio.toFixed(1)}×`
+                : '∞';
+              return (
+                <tr key={s.key} className="align-middle">
+                  <td className="py-2 pr-4">
+                    <div className="font-medium">{s.label}</div>
+                    <div className="text-xs text-slate-500">{s.description}</div>
+                  </td>
+                  <td
+                    className={`py-2 pr-4 text-right font-mono ${
+                      ue.monthlyProfit >= 0 ? 'text-healthy' : 'text-danger'
+                    }`}
+                  >
+                    {formatGBP(ue.monthlyProfit)}
+                  </td>
+                  <td className="py-2 pr-4 text-right font-mono">{formatGBP(ue.trueCAC)}</td>
+                  <td className="py-2 pr-4 text-right font-mono">{formatGBP(ue.ltv)}</td>
+                  <td
+                    className={`py-2 pr-4 text-right font-mono ${
+                      isFinite(ue.ltvToCacRatio) && ue.ltvToCacRatio >= 3
+                        ? 'text-healthy'
+                        : isFinite(ue.ltvToCacRatio) && ue.ltvToCacRatio >= 1.5
+                        ? 'text-caution'
+                        : 'text-danger'
+                    }`}
+                  >
+                    {ratio}
+                  </td>
+                  <td className="py-2">
+                    <HealthBadge health={kind} label={label} />
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </Card>
   );
 }
 

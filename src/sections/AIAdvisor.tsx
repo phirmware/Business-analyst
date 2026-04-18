@@ -2,13 +2,24 @@ import { useMemo, useRef, useState, useEffect } from 'react';
 import OpenAI from 'openai';
 import type { AppSettings, BusinessAnalysis, ChatMessage } from '../types';
 import { FRAMEWORK_SYSTEM_PROMPT, summarizeAnalysisForChat } from '../framework';
+import { isUsageMode } from '../calculations';
 import { Button, Card } from '../components/ui';
 
-const STARTER_PROMPTS = [
+const FLAT_STARTER_PROMPTS = [
   'Stress-test this idea',
   "What's my moat?",
   'Is this margin good for my industry?',
   'What am I missing?',
+];
+
+const USAGE_STARTER_PROMPTS = [
+  'Is my LTV:True-CAC ratio actually viable, given my free-tier cost?',
+  'What happens to my business if my top 10% of customers churn?',
+  'If my upstream supplier raises prices 40%, how do my margins and verdict change?',
+  'Am I a wrapper business? What would I need to build to avoid being replaced?',
+  'Is my free tier sustainable given the free-tier drag in my True CAC?',
+  'Should I move to hybrid (base + usage) pricing, and what base fee would make p25 profitable?',
+  'My NRR is below 100% — what does that mean for my long-term survival?',
 ];
 
 export function AIAdvisor({
@@ -142,15 +153,17 @@ export function AIAdvisor({
                 current business" above.
               </p>
               <div className="flex flex-wrap gap-2">
-                {STARTER_PROMPTS.map((p) => (
-                  <button
-                    key={p}
-                    className="text-xs px-2 py-1 rounded-md bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700"
-                    onClick={() => setInput(p)}
-                  >
-                    {p}
-                  </button>
-                ))}
+                {(isUsageMode(analysis) ? USAGE_STARTER_PROMPTS : FLAT_STARTER_PROMPTS).map(
+                  (p) => (
+                    <button
+                      key={p}
+                      className="text-xs px-2 py-1 rounded-md bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-left"
+                      onClick={() => setInput(p)}
+                    >
+                      {p}
+                    </button>
+                  )
+                )}
               </div>
             </div>
           )}

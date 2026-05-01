@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { BusinessAnalysis } from '../types';
 import {
   calcUnitEconomics,
@@ -9,10 +9,12 @@ import {
   healthContribution,
   healthProfit,
   isUsageMode,
+  type UsageVariances,
   type Variances,
+  zeroUsageVariances,
   zeroVariances,
 } from '../calculations';
-import { Button, Card, HealthBadge, Metric } from '../components/ui';
+import { Button, Card, HealthBadge, Metric, Tooltip } from '../components/ui';
 
 interface Scenario {
   key: string;
@@ -53,7 +55,6 @@ const USAGE_SCENARIOS: UsageScenario[] = [
     description: 'Your biggest whale churns. Revenue collapses by the top-1% share of the decile curve.',
     apply: (a) => {
       const ue = calcUsageEconomics(a);
-      // top 1% ≈ ~40% of top decile for power-law, ~20% for moderate, ~10% for flat
       const factor = a.usagePricing.distributionShape === 'power-law' ? 0.4 : a.usagePricing.distributionShape === 'moderate' ? 0.2 : 0.1;
       const top1Share = (ue.top10PctShare / 100) * factor;
       const next = deepCopyAnalysis(a);
@@ -76,7 +77,6 @@ const USAGE_SCENARIOS: UsageScenario[] = [
         0,
         next.usagePricing.averageUnitsPerCustomer * (1 - shareLost)
       );
-      // Also shrink paying customer count by ~10%
       next.unitsPerMonth = Math.max(0, next.unitsPerMonth * 0.9);
       return next;
     },
@@ -168,11 +168,21 @@ const SCENARIOS: Scenario[] = [
 
 export function StressTest({ analysis }: { analysis: BusinessAnalysis }) {
   const [v, setV] = useState<Variances>(zeroVariances);
+  const [usageV, setUsageV] = useState<UsageVariances>(zeroUsageVariances);
   const [monthsMultiplier, setMonthsMultiplier] = useState(1);
   const usageMode = isUsageMode(analysis);
 
+  // Reset all sliders when switching between flat and usage pricing modes
+  useEffect(() => {
+    setV(zeroVariances);
+    setUsageV(zeroUsageVariances);
+    setMonthsMultiplier(1);
+  }, [usageMode]);
+
   const base = useMemo(() => calcUnitEconomics(analysis), [analysis]);
   const stressed = useMemo(() => calcUnitEconomics(analysis, v), [analysis, v]);
+  const baseUsage = useMemo(() => calcUsageEconomics(analysis), [analysis]);
+  const stressedUsage = useMemo(() => calcUsageEconomics(analysis, usageV), [analysis, usageV]);
 
   const applyScenario = (s: Scenario) => {
     setV(s.variances);
@@ -185,11 +195,25 @@ export function StressTest({ analysis }: { analysis: BusinessAnalysis }) {
     return { kind: 'danger' as const, label: 'Business dies' };
   };
 
+  // Flat-mode runway
   const cumulativeLoss = stressed.monthlyProfit < 0 ? stressed.monthlyProfit * monthsMultiplier : 0;
   const runwayAfter =
     stressed.monthlyProfit >= 0
       ? Infinity
       : (analysis.cashReserve + cumulativeLoss) / -stressed.monthlyProfit;
+
+  // Usage-mode runway
+  const usageRunwayAfter =
+    stressedUsage.monthlyProfit >= 0
+      ? Infinity
+      : analysis.cashReserve / -stressedUsage.monthlyProfit;
+
+  const usageMarginHealth =
+    stressedUsage.consumptionMarginPct >= 30
+      ? 'healthy'
+      : stressedUsage.consumptionMarginPct >= 10
+      ? 'caution'
+      : 'danger';
 
   return (
     <div className="space-y-6">
@@ -206,121 +230,279 @@ export function StressTest({ analysis }: { analysis: BusinessAnalysis }) {
         Revise the model or pick a different business.
       </div>
 
-      <Card title="Scenarios">
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2">
-          {SCENARIOS.map((s) => (
-            <button
-              key={s.key}
-              onClick={() => applyScenario(s)}
-              className="text-left rounded-md border border-slate-200 dark:border-slate-800 p-3 hover:bg-slate-50 dark:hover:bg-slate-800 transition"
-            >
-              <div className="font-medium text-sm">{s.label}</div>
-              <div className="text-xs text-slate-500 mt-1">{s.description}</div>
-            </button>
-          ))}
+      {usageMode && (
+        <div className="rounded-xl border border-indigo-200 dark:border-indigo-800 bg-indigo-50 dark:bg-indigo-950/40 p-3 text-sm text-indigo-900 dark:text-indigo-200">
+          <strong>Sliders model continuous "what if" exploration.</strong> The survival matrix below
+          models specific named events (top customer leaves, supplier shock, NRR collapse). Use
+          both — sliders for sensitivity, matrix for catastrophe scenarios.
         </div>
-      </Card>
+      )}
 
+      {/* Flat-mode quick scenarios (hidden in usage mode — survival matrix replaces them) */}
+      {!usageMode && (
+        <Card title="Scenarios">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2">
+            {SCENARIOS.map((s) => (
+              <button
+                key={s.key}
+                onClick={() => applyScenario(s)}
+                className="text-left rounded-md border border-slate-200 dark:border-slate-800 p-3 hover:bg-slate-50 dark:hover:bg-slate-800 transition"
+              >
+                <div className="font-medium text-sm">{s.label}</div>
+                <div className="text-xs text-slate-500 mt-1">{s.description}</div>
+              </button>
+            ))}
+          </div>
+        </Card>
+      )}
+
+      {/* Sliders — mode-aware */}
       <Card title="Sliders">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <Slider
-            label="Revenue per unit"
-            min={-50}
-            max={50}
-            value={v.revenuePct}
-            onChange={(n) => setV({ ...v, revenuePct: n })}
-          />
-          <Slider
-            label="Unit volume"
-            min={-70}
-            max={50}
-            value={v.volumePct}
-            onChange={(n) => setV({ ...v, volumePct: n })}
-          />
-          <Slider
-            label="Variable cost"
-            min={-20}
-            max={50}
-            value={v.variablePct}
-            onChange={(n) => setV({ ...v, variablePct: n })}
-          />
-          <Slider
-            label="Fixed cost"
-            min={-20}
-            max={100}
-            value={v.fixedPct}
-            onChange={(n) => setV({ ...v, fixedPct: n })}
-          />
-        </div>
-        <div className="mt-4 flex gap-2">
-          <Button variant="secondary" onClick={() => setV(zeroVariances)}>
-            Reset to base
-          </Button>
-        </div>
+        {usageMode ? (
+          <>
+            {/* Group 1: Pricing & demand */}
+            <div className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400 mb-3">
+              Pricing &amp; demand
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <Slider
+                label="Price per consumption unit"
+                min={-50}
+                max={50}
+                value={usageV.pricePct}
+                onChange={(n) => setUsageV({ ...usageV, pricePct: n })}
+                tooltip="Models price changes — competitor pressure forcing you down, or successful price increases. Note: in usage models, raising price often reduces usage too."
+              />
+              <Slider
+                label="Usage per customer"
+                min={-70}
+                max={50}
+                value={usageV.usagePct}
+                onChange={(n) => setUsageV({ ...usageV, usagePct: n })}
+                tooltip="Models customers using your product more or less than expected. A 30% drop simulates customers cutting back during a downturn or finding workarounds. This is the silent killer in usage SaaS — revenue can decay without anyone churning."
+              />
+              <Slider
+                label="Customer count"
+                min={-70}
+                max={50}
+                value={usageV.customersPct}
+                onChange={(n) => setUsageV({ ...usageV, customersPct: n })}
+                tooltip="Models customer churn or acquisition slowdown. Different from usage decline — these customers leave entirely, taking their LTV and any expansion potential with them."
+              />
+            </div>
+
+            {/* Group 2: Costs */}
+            <div className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400 mt-6 mb-3">
+              Costs
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <Slider
+                label="Supplier / API cost"
+                min={-20}
+                max={100}
+                value={usageV.supplierCostPct}
+                onChange={(n) => setUsageV({ ...usageV, supplierCostPct: n })}
+                tooltip="Models pricing changes by your key suppliers (OpenAI, Twilio, AWS, Stripe, etc.). The most realistic shock for any business built on someone else's API. Range goes to +100% because real supplier shocks can be brutal. Only affects costs you've flagged as '3rd-party' in the Analyzer."
+              />
+              <Slider
+                label="Other variable costs"
+                min={-20}
+                max={50}
+                value={usageV.otherVarCostPct}
+                onChange={(n) => setUsageV({ ...usageV, otherVarCostPct: n })}
+                tooltip="Models changes in costs you control more directly — your own servers, support overhead, payment processing fees. Affects variable costs not flagged as 3rd-party."
+              />
+              <Slider
+                label="Fixed costs"
+                min={-20}
+                max={100}
+                value={usageV.fixedPct}
+                onChange={(n) => setUsageV({ ...usageV, fixedPct: n })}
+                tooltip="Models changes in your fixed cost base — rent, salaries, software subscriptions, insurance."
+              />
+            </div>
+
+            <div className="mt-4">
+              <Button variant="secondary" onClick={() => setUsageV(zeroUsageVariances)}>
+                Reset all sliders
+              </Button>
+            </div>
+          </>
+        ) : (
+          <>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <Slider
+                label="Revenue per unit"
+                min={-50}
+                max={50}
+                value={v.revenuePct}
+                onChange={(n) => setV({ ...v, revenuePct: n })}
+              />
+              <Slider
+                label="Unit volume"
+                min={-70}
+                max={50}
+                value={v.volumePct}
+                onChange={(n) => setV({ ...v, volumePct: n })}
+              />
+              <Slider
+                label="Variable cost"
+                min={-20}
+                max={50}
+                value={v.variablePct}
+                onChange={(n) => setV({ ...v, variablePct: n })}
+              />
+              <Slider
+                label="Fixed cost"
+                min={-20}
+                max={100}
+                value={v.fixedPct}
+                onChange={(n) => setV({ ...v, fixedPct: n })}
+              />
+            </div>
+            <div className="mt-4 flex gap-2">
+              <Button variant="secondary" onClick={() => setV(zeroVariances)}>
+                Reset to base
+              </Button>
+            </div>
+          </>
+        )}
       </Card>
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <Card>
-          <Metric
-            label="Contribution margin"
-            value={formatGBP(stressed.contributionPerUnit)}
-            sub={formatPct(stressed.contributionMarginPct)}
-            health={healthContribution(stressed.contributionMarginPct)}
-            large
-          />
-        </Card>
-        <Card>
-          <Metric
-            label="Breakeven"
-            value={`${formatNum(stressed.breakevenUnits, 1)} / mo`}
-            health={isFinite(stressed.breakevenUnits) ? 'healthy' : 'danger'}
-            large
-          />
-        </Card>
-        <Card>
-          <Metric
-            label="Monthly profit"
-            value={formatGBP(stressed.monthlyProfit)}
-            sub={`Base: ${formatGBP(base.monthlyProfit)}`}
-            health={healthProfit(stressed.monthlyProfit)}
-            large
-          />
-        </Card>
-        <Card>
-          <Metric
-            label={`Runway${monthsMultiplier > 1 ? ` (after ${monthsMultiplier} bad mo)` : ''}`}
-            value={
-              stressed.monthlyProfit >= 0
-                ? 'Profitable'
-                : isFinite(runwayAfter)
-                ? `${runwayAfter.toFixed(1)} mo`
-                : '—'
-            }
-            sub={`Reserve ${formatGBP(analysis.cashReserve)}`}
-            health={
-              stressed.monthlyProfit >= 0
-                ? 'healthy'
-                : runwayAfter >= 6
-                ? 'caution'
-                : 'danger'
-            }
-            large
-          />
-        </Card>
-      </div>
+      {/* Live output metrics — mode-aware */}
+      {usageMode ? (
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <Card>
+            <Metric
+              label="Per-unit margin"
+              value={formatPct(stressedUsage.consumptionMarginPct)}
+              sub={formatGBP(stressedUsage.contributionPerConsumptionUnit) + ' / unit'}
+              health={usageMarginHealth}
+              large
+            />
+          </Card>
+          <Card>
+            <Metric
+              label="Monthly profit"
+              value={formatGBP(stressedUsage.monthlyProfit)}
+              sub={`Base: ${formatGBP(baseUsage.monthlyProfit)}`}
+              health={
+                stressedUsage.monthlyProfit > 0
+                  ? 'healthy'
+                  : stressedUsage.monthlyProfit === 0
+                  ? 'caution'
+                  : 'danger'
+              }
+              large
+            />
+          </Card>
+          <Card>
+            <Metric
+              label="LTV : True-CAC"
+              value={
+                isFinite(stressedUsage.ltvToCacRatio)
+                  ? `${stressedUsage.ltvToCacRatio.toFixed(1)}×`
+                  : '∞'
+              }
+              sub="Healthy ≥ 3× · Fragile < 1.5×"
+              health={
+                stressedUsage.ltvToCacRatio >= 3
+                  ? 'healthy'
+                  : stressedUsage.ltvToCacRatio >= 1.5
+                  ? 'caution'
+                  : 'danger'
+              }
+              large
+            />
+          </Card>
+          <Card>
+            <Metric
+              label="Runway"
+              value={
+                stressedUsage.monthlyProfit >= 0
+                  ? 'Profitable'
+                  : isFinite(usageRunwayAfter)
+                  ? `${usageRunwayAfter.toFixed(1)} mo`
+                  : '—'
+              }
+              sub={`Reserve ${formatGBP(analysis.cashReserve)}`}
+              health={
+                stressedUsage.monthlyProfit >= 0
+                  ? 'healthy'
+                  : usageRunwayAfter >= 6
+                  ? 'caution'
+                  : 'danger'
+              }
+              large
+            />
+          </Card>
+        </div>
+      ) : (
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <Card>
+            <Metric
+              label="Contribution margin"
+              value={formatGBP(stressed.contributionPerUnit)}
+              sub={formatPct(stressed.contributionMarginPct)}
+              health={healthContribution(stressed.contributionMarginPct)}
+              large
+            />
+          </Card>
+          <Card>
+            <Metric
+              label="Breakeven"
+              value={`${formatNum(stressed.breakevenUnits, 1)} / mo`}
+              health={isFinite(stressed.breakevenUnits) ? 'healthy' : 'danger'}
+              large
+            />
+          </Card>
+          <Card>
+            <Metric
+              label="Monthly profit"
+              value={formatGBP(stressed.monthlyProfit)}
+              sub={`Base: ${formatGBP(base.monthlyProfit)}`}
+              health={healthProfit(stressed.monthlyProfit)}
+              large
+            />
+          </Card>
+          <Card>
+            <Metric
+              label={`Runway${monthsMultiplier > 1 ? ` (after ${monthsMultiplier} bad mo)` : ''}`}
+              value={
+                stressed.monthlyProfit >= 0
+                  ? 'Profitable'
+                  : isFinite(runwayAfter)
+                  ? `${runwayAfter.toFixed(1)} mo`
+                  : '—'
+              }
+              sub={`Reserve ${formatGBP(analysis.cashReserve)}`}
+              health={
+                stressed.monthlyProfit >= 0
+                  ? 'healthy'
+                  : runwayAfter >= 6
+                  ? 'caution'
+                  : 'danger'
+              }
+              large
+            />
+          </Card>
+        </div>
+      )}
 
       <Card title="Verdict under current scenario">
         {(() => {
-          const vr = verdict(stressed.monthlyProfit, runwayAfter);
+          const profit = usageMode ? stressedUsage.monthlyProfit : stressed.monthlyProfit;
+          const runway = usageMode ? usageRunwayAfter : runwayAfter;
+          const vr = verdict(profit, runway);
           return (
             <div className="flex items-center gap-3">
               <HealthBadge health={vr.kind} label={vr.label} />
               <div className="text-sm text-slate-600 dark:text-slate-300">
-                Monthly profit: {formatGBP(stressed.monthlyProfit)}. Runway:{' '}
-                {stressed.monthlyProfit >= 0
+                Monthly profit: {formatGBP(profit)}. Runway:{' '}
+                {profit >= 0
                   ? 'profitable'
-                  : isFinite(runwayAfter)
-                  ? `${runwayAfter.toFixed(1)} months`
+                  : isFinite(runway)
+                  ? `${runway.toFixed(1)} months`
                   : '—'}
                 .
               </div>
@@ -483,17 +665,22 @@ function Slider({
   max,
   value,
   onChange,
+  tooltip,
 }: {
   label: string;
   min: number;
   max: number;
   value: number;
   onChange: (n: number) => void;
+  tooltip?: string;
 }) {
   return (
     <div>
       <div className="flex items-center justify-between mb-1">
-        <div className="text-sm font-medium">{label}</div>
+        <div className="flex items-center gap-1 text-sm font-medium">
+          {label}
+          {tooltip && <Tooltip text={tooltip} />}
+        </div>
         <div
           className={`font-mono text-sm ${
             value < 0 ? 'text-danger' : value > 0 ? 'text-healthy' : 'text-slate-500'
@@ -509,6 +696,7 @@ function Slider({
         max={max}
         value={value}
         onChange={(e) => onChange(parseFloat(e.target.value))}
+        className="w-full"
       />
       <div className="flex justify-between text-[10px] text-slate-400 mt-1">
         <span>{min}%</span>

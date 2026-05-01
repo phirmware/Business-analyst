@@ -20,6 +20,24 @@ export const zeroVariances: Variances = {
   fixedPct: 0,
 };
 
+export interface UsageVariances {
+  pricePct: number;        // price per consumption unit
+  usagePct: number;        // avg units per customer + all percentiles
+  customersPct: number;    // paying customer count
+  supplierCostPct: number; // 3rd-party flagged costs only
+  otherVarCostPct: number; // non-3rd-party variable costs
+  fixedPct: number;        // fixed costs
+}
+
+export const zeroUsageVariances: UsageVariances = {
+  pricePct: 0,
+  usagePct: 0,
+  customersPct: 0,
+  supplierCostPct: 0,
+  otherVarCostPct: 0,
+  fixedPct: 0,
+};
+
 export interface UnitEconomics {
   pricePerUnit: number;
   unitsPerMonth: number;
@@ -209,6 +227,20 @@ function lineItemCostAt(items: LineItem[], price: number, variablePct: number): 
   }, 0);
 }
 
+function splitVarCostAt(
+  items: LineItem[],
+  price: number,
+  supplierPct: number,
+  otherPct: number
+): number {
+  return items.reduce((sum, it) => {
+    const pct = it.isThirdParty ? supplierPct : otherPct;
+    const adj = applyVariance(it.amount, pct);
+    if (it.type === 'percent') return sum + (price * adj) / 100;
+    return sum + adj;
+  }, 0);
+}
+
 function thirdPartyCostAt(items: LineItem[], price: number, variablePct: number): number {
   return items.reduce((sum, it) => {
     if (!it.isThirdParty) return sum;
@@ -237,35 +269,36 @@ export function effectiveLifetime(u: UsagePricingData): number {
 
 export function calcUsageEconomics(
   a: BusinessAnalysis,
-  v: Variances = zeroVariances
+  v: UsageVariances = zeroUsageVariances
 ): UsageEconomics {
   const u = a.usagePricing;
 
   // Per-consumption-unit
-  const price = applyVariance(u.pricePerConsumptionUnit || 0, v.revenuePct);
-  const variableCostPerConsumption = lineItemCostAt(
+  const price = applyVariance(u.pricePerConsumptionUnit || 0, v.pricePct);
+  const variableCostPerConsumption = splitVarCostAt(
     u.consumptionVariableCosts,
     price,
-    v.variablePct
+    v.supplierCostPct,
+    v.otherVarCostPct
   );
-  const thirdPartyCost = thirdPartyCostAt(u.consumptionVariableCosts, price, v.variablePct);
+  const thirdPartyCost = thirdPartyCostAt(u.consumptionVariableCosts, price, v.supplierCostPct);
   const contribution = price - variableCostPerConsumption;
   const consumptionMarginPct = price > 0 ? (contribution / price) * 100 : 0;
   const supplierDependencyPct =
     variableCostPerConsumption > 0 ? (thirdPartyCost / variableCostPerConsumption) * 100 : 0;
 
-  // Per customer (monthly)
-  const avgUnits = Math.max(0, applyVariance(u.averageUnitsPerCustomer || 0, v.volumePct));
+  // Per customer (monthly) — usage variance scales consumption, customers variance scales headcount
+  const avgUnits = Math.max(0, applyVariance(u.averageUnitsPerCustomer || 0, v.usagePct));
   const baseFee = u.baseFee || 0;
   const avgRevenuePerCustomer = avgUnits * price + baseFee;
   const avgVariableCostPerCustomer = avgUnits * variableCostPerConsumption;
   const avgContributionPerCustomer = avgRevenuePerCustomer - avgVariableCostPerCustomer;
 
   const contributionAt = (units: number) => baseFee + units * contribution;
-  const p25Contribution = contributionAt(Math.max(0, u.p25Units || 0));
-  const p50Contribution = contributionAt(Math.max(0, u.p50Units || 0));
-  const p75Contribution = contributionAt(Math.max(0, u.p75Units || 0));
-  const p90Contribution = contributionAt(Math.max(0, u.p90Units || 0));
+  const p25Contribution = contributionAt(Math.max(0, applyVariance(u.p25Units || 0, v.usagePct)));
+  const p50Contribution = contributionAt(Math.max(0, applyVariance(u.p50Units || 0, v.usagePct)));
+  const p75Contribution = contributionAt(Math.max(0, applyVariance(u.p75Units || 0, v.usagePct)));
+  const p90Contribution = contributionAt(Math.max(0, applyVariance(u.p90Units || 0, v.usagePct)));
 
   // True CAC — direct + free-tier drag
   const conversion = Math.max(0.01, u.conversionRatePct || 0) / 100;
@@ -287,7 +320,7 @@ export function calcUsageEconomics(
   const top20PctShare = ((decile[9] || 0) + (decile[8] || 0)) * 100;
 
   // Business-level monthly (payingCustomers reused from unitsPerMonth)
-  const payingCustomers = Math.max(0, applyVariance(a.unitsPerMonth || 0, v.volumePct));
+  const payingCustomers = Math.max(0, applyVariance(a.unitsPerMonth || 0, v.customersPct));
   const monthlyRevenue = avgRevenuePerCustomer * payingCustomers;
   const monthlyVariableCosts = avgVariableCostPerCustomer * payingCustomers;
   const monthlyFixedCosts = totalFixed(a.fixedCosts, v.fixedPct);

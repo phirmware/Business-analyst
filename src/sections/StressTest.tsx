@@ -513,7 +513,7 @@ export function StressTest({ analysis }: { analysis: BusinessAnalysis }) {
 
       {usageMode && <UsageSurvivalMatrix analysis={analysis} />}
 
-      <Card title="Survival matrix (flat pricing)">
+      {!usageMode && <Card title="Survival matrix (flat pricing)">
         <div className="overflow-x-auto -mx-5 px-5">
           <table className="w-full text-sm">
             <thead className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">
@@ -580,7 +580,7 @@ export function StressTest({ analysis }: { analysis: BusinessAnalysis }) {
             </tbody>
           </table>
         </div>
-      </Card>
+      </Card>}
     </div>
   );
 }

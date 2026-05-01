@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState, useCallback, useReducer } from 'react';
 import type { AppSettings, BusinessAnalysis, Section } from './types';
 import {
   defaultSettings,
+  hydrate,
   loadAnalyses,
   loadSettings,
   saveAnalyses,
@@ -20,6 +21,8 @@ import { Compare } from './sections/Compare';
 import { Settings as SettingsView } from './sections/Settings';
 import { Onboarding } from './sections/Onboarding';
 import { Button } from './components/ui';
+import { ExportDialog } from './components/ExportDialog';
+import { ImportDialog } from './components/ImportDialog';
 
 const SECTIONS: { key: Section; label: string; icon: string }[] = [
   { key: 'filter', label: 'Idea Filter', icon: '🧪' },
@@ -47,6 +50,8 @@ export default function App() {
   const [lastSaved, setLastSaved] = useState<number | null>(null);
   const [toast, setToast] = useState<Toast | null>(null);
   const [lastCreatedId, setLastCreatedId] = useState<string | null>(null);
+  const [showExport, setShowExport] = useState(false);
+  const [showImport, setShowImport] = useState(false);
   const [, tick] = useReducer((x: number) => x + 1, 0);
 
   // Load from storage once on mount
@@ -159,32 +164,59 @@ export default function App() {
     [analyses, showToast]
   );
 
+  const importAnalysis = useCallback(
+    (business: BusinessAnalysis, replaceId?: string) => {
+      const hydratedBusiness = hydrate(business);
+      setAnalyses((list) => {
+        if (replaceId) {
+          return list.map((a) => (a.id === replaceId ? hydratedBusiness : a));
+        }
+        return [hydratedBusiness, ...list];
+      });
+      setSettings((s) => ({ ...s, activeId: hydratedBusiness.id, onboardingCompleted: true }));
+      setSection('analyzer');
+      setShowImport(false);
+      showToast(`Imported "${hydratedBusiness.name}".`);
+    },
+    [showToast]
+  );
+
   if (!loaded) return null;
 
   // Onboarding
   if (!settings.onboardingCompleted) {
     return (
-      <Onboarding
-        onComplete={(a) => {
-          setAnalyses((list) => [a, ...list]);
-          setSettings((s) => ({
-            ...s,
-            activeId: a.id,
-            onboardingCompleted: true,
-          }));
-          setSection('analyzer');
-        }}
-        onSkip={() => {
-          const fresh = newAnalysis('My business');
-          setAnalyses((list) => [fresh, ...list]);
-          setSettings((s) => ({
-            ...s,
-            activeId: fresh.id,
-            onboardingCompleted: true,
-          }));
-          setSection('analyzer');
-        }}
-      />
+      <>
+        <Onboarding
+          onComplete={(a) => {
+            setAnalyses((list) => [a, ...list]);
+            setSettings((s) => ({
+              ...s,
+              activeId: a.id,
+              onboardingCompleted: true,
+            }));
+            setSection('analyzer');
+          }}
+          onSkip={() => {
+            const fresh = newAnalysis('My business');
+            setAnalyses((list) => [fresh, ...list]);
+            setSettings((s) => ({
+              ...s,
+              activeId: fresh.id,
+              onboardingCompleted: true,
+            }));
+            setSection('analyzer');
+          }}
+          onImport={() => setShowImport(true)}
+        />
+        {showImport && (
+          <ImportDialog
+            existingAnalyses={analyses}
+            onImport={importAnalysis}
+            onClose={() => setShowImport(false)}
+          />
+        )}
+      </>
     );
   }
 
@@ -224,6 +256,11 @@ export default function App() {
           </div>
           <div className="flex-1" />
           <SavedIndicator lastSaved={lastSaved} />
+          {active && (
+            <Button variant="ghost" className="!px-2 text-xs" onClick={() => setShowExport(true)}>
+              Export
+            </Button>
+          )}
           <BusinessSelector
             analyses={analyses}
             activeId={settings.activeId}
@@ -231,6 +268,7 @@ export default function App() {
             onNew={() => createAnalysis()}
             onDuplicate={duplicateAnalysis}
             onDelete={deleteAnalysis}
+            onImport={() => setShowImport(true)}
           />
           <Button
             variant="ghost"
@@ -312,6 +350,21 @@ export default function App() {
       </div>
 
       <ToastView toast={toast} onDismiss={() => setToast(null)} />
+
+      {showExport && active && (
+        <ExportDialog
+          analysis={active}
+          onClose={() => setShowExport(false)}
+          onExported={() => showToast(`Exported "${active.name}".`)}
+        />
+      )}
+      {showImport && (
+        <ImportDialog
+          existingAnalyses={analyses}
+          onImport={importAnalysis}
+          onClose={() => setShowImport(false)}
+        />
+      )}
     </div>
   );
 }
@@ -370,6 +423,7 @@ function BusinessSelector({
   onNew,
   onDuplicate,
   onDelete,
+  onImport,
 }: {
   analyses: BusinessAnalysis[];
   activeId: string | null;
@@ -377,6 +431,7 @@ function BusinessSelector({
   onNew: () => void;
   onDuplicate: (id: string) => void;
   onDelete: (id: string) => void;
+  onImport: () => void;
 }) {
   const [open, setOpen] = useState(false);
   const active = analyses.find((a) => a.id === activeId);
@@ -402,6 +457,15 @@ function BusinessSelector({
                 className="w-full text-left px-2 py-1.5 rounded-md text-sm hover:bg-slate-100 dark:hover:bg-slate-800 text-indigo-600 dark:text-indigo-400 font-medium"
               >
                 + New analysis
+              </button>
+              <button
+                onClick={() => {
+                  onImport();
+                  setOpen(false);
+                }}
+                className="w-full text-left px-2 py-1.5 rounded-md text-sm hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-400"
+              >
+                Import from file…
               </button>
             </div>
             <div className="p-1">

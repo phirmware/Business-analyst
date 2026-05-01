@@ -92,7 +92,7 @@ const DEFAULT_IDEA_FILTER: IdeaFilterData = {
   reachEvidence: '',
 };
 
-function hydrate(a: BusinessAnalysis): BusinessAnalysis {
+export function hydrate(a: BusinessAnalysis): BusinessAnalysis {
   return {
     ...a,
     pricingMode: a.pricingMode ?? 'flat-subscription',
@@ -100,6 +100,7 @@ function hydrate(a: BusinessAnalysis): BusinessAnalysis {
     distribution: { ...DEFAULT_DISTRIBUTION, ...(a.distribution ?? {}) },
     ideaFilter: { ...DEFAULT_IDEA_FILTER, ...(a.ideaFilter ?? {}) },
     scorecard: { ...a.scorecard, q5Notes: a.scorecard?.q5Notes ?? '' },
+    editHistory: a.editHistory ?? [],
   };
 }
 

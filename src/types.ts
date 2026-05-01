@@ -98,6 +98,12 @@ export interface ChatMessage {
   content: string;
 }
 
+export interface EditHistoryEntry {
+  editor: string;
+  editedAt: string; // ISO 8601
+  notes: string;
+}
+
 export interface BusinessAnalysis {
   id: string;
   createdAt: number;
@@ -126,6 +132,8 @@ export interface BusinessAnalysis {
   ideaFilter: IdeaFilterData;
   // AI chat
   chat: ChatMessage[];
+  // Collaboration — populated on import, appended on export
+  editHistory?: EditHistoryEntry[];
 }
 
 export type AiProvider = 'openai' | 'openrouter' | 'anthropic' | 'custom';

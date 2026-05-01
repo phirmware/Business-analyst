@@ -6,9 +6,11 @@ import { Button, Field, NumberInput, Select, TextInput } from '../components/ui'
 export function Onboarding({
   onComplete,
   onSkip,
+  onImport,
 }: {
   onComplete: (a: BusinessAnalysis) => void;
   onSkip: () => void;
+  onImport?: () => void;
 }) {
   const [step, setStep] = useState(0);
   const [draft, setDraft] = useState<BusinessAnalysis>(() => newAnalysis('My business'));
@@ -32,6 +34,16 @@ export function Onboarding({
           <p className="font-medium text-slate-800 dark:text-slate-100">
             The goal: make self-deception structurally impossible.
           </p>
+          {onImport && (
+            <div className="mt-4 pt-4 border-t border-slate-200 dark:border-slate-700">
+              <p className="text-slate-500 dark:text-slate-400 mb-2">
+                Already have an analysis from a collaborator?
+              </p>
+              <Button variant="secondary" onClick={onImport}>
+                Import from file…
+              </Button>
+            </div>
+          )}
         </div>
       ),
     },

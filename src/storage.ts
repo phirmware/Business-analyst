@@ -101,6 +101,7 @@ export function hydrate(a: BusinessAnalysis): BusinessAnalysis {
     ideaFilter: { ...DEFAULT_IDEA_FILTER, ...(a.ideaFilter ?? {}) },
     scorecard: { ...a.scorecard, q5Notes: a.scorecard?.q5Notes ?? '' },
     editHistory: a.editHistory ?? [],
+    notes: a.notes ?? [],
   };
 }
 

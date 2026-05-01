@@ -104,6 +104,15 @@ export interface EditHistoryEntry {
   notes: string;
 }
 
+export interface Note {
+  id: string;
+  title: string;
+  content: string;
+  sectionTag: Section | '';
+  createdAt: number;
+  updatedAt: number;
+}
+
 export interface BusinessAnalysis {
   id: string;
   createdAt: number;
@@ -134,6 +143,8 @@ export interface BusinessAnalysis {
   chat: ChatMessage[];
   // Collaboration — populated on import, appended on export
   editHistory?: EditHistoryEntry[];
+  // Decision notes
+  notes: Note[];
 }
 
 export type AiProvider = 'openai' | 'openrouter' | 'anthropic' | 'custom';
@@ -155,6 +166,7 @@ export type Section =
   | 'scorecard'
   | 'distribute'
   | 'library'
+  | 'notes'
   | 'ai'
   | 'compare'
   | 'settings';

@@ -455,6 +455,7 @@ export function newAnalysis(name = 'New business'): BusinessAnalysis {
     distribution: defaultDistribution(),
     ideaFilter: defaultIdeaFilter(),
     chat: [],
+    notes: [],
   };
 }
 

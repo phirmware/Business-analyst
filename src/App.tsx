@@ -20,6 +20,7 @@ import { AIAdvisor } from './sections/AIAdvisor';
 import { Compare } from './sections/Compare';
 import { Settings as SettingsView } from './sections/Settings';
 import { Onboarding } from './sections/Onboarding';
+import { Notes } from './sections/Notes';
 import { Button } from './components/ui';
 import { ExportDialog } from './components/ExportDialog';
 import { ImportDialog } from './components/ImportDialog';
@@ -30,6 +31,7 @@ const SECTIONS: { key: Section; label: string; icon: string }[] = [
   { key: 'stress', label: 'Stress Test', icon: '🔥' },
   { key: 'scorecard', label: 'Scorecard', icon: '📝' },
   { key: 'distribute', label: 'Distribution', icon: '📣' },
+  { key: 'notes', label: 'Notes', icon: '📓' },
   { key: 'library', label: 'Learning Library', icon: '📚' },
   { key: 'ai', label: 'AI Advisor', icon: '🤖' },
   { key: 'compare', label: 'Compare', icon: '⚖️' },
@@ -332,6 +334,9 @@ export default function App() {
           )}
           {section === 'distribute' && active && (
             <Distribution analysis={active} onChange={updateActive} />
+          )}
+          {section === 'notes' && active && (
+            <Notes analysis={active} onChange={updateActive} />
           )}
           {section === 'library' && <Library />}
           {section === 'ai' && active && (

@@ -1,10 +1,13 @@
 import { useEffect, useMemo, useRef } from 'react';
 import type { BusinessAnalysis, CostType, FixedItem, LineItem, PricingMode } from '../types';
 import {
+  calcJCurve,
   calcUnitEconomics,
+  calcUsageEconomics,
   formatGBP,
   formatNum,
   formatPct,
+  getJCurveStats,
   healthContribution,
   healthProfit,
   healthSafety,
@@ -26,6 +29,8 @@ import {
   Tooltip,
   inputClass,
 } from '../components/ui';
+import { SetupRecoveryInputs } from '../components/SetupRecoveryInputs';
+import { JCurveChart } from '../components/JCurveChart';
 import {
   PieChart,
   Pie,
@@ -56,6 +61,17 @@ export function Analyzer({
 }) {
   const ue = useMemo(() => calcUnitEconomics(analysis), [analysis]);
   const usageMode = isUsageMode(analysis);
+  const ue2 = useMemo(() => (usageMode ? calcUsageEconomics(analysis) : null), [analysis, usageMode]);
+  const jCurvePoints = useMemo(() => {
+    const contrib = usageMode
+      ? (ue2?.avgContributionPerCustomer ?? 0)
+      : ue.contributionPerUnit;
+    const fixed = usageMode
+      ? (ue2?.monthlyFixedCosts ?? 0)
+      : ue.totalFixedCosts;
+    return calcJCurve(contrib, fixed, analysis.setupCost, analysis.setupRecovery);
+  }, [analysis, usageMode, ue, ue2]);
+  const jStats = useMemo(() => getJCurveStats(jCurvePoints), [jCurvePoints]);
   const nameRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
@@ -320,8 +336,16 @@ export function Analyzer({
         </div>
       </Card>
 
+      <SetupRecoveryInputs analysis={analysis} onChange={onChange} />
+
       {/* Usage mode outputs */}
       {usageMode && <UsagePricingHealth analysis={analysis} />}
+
+      {/* J-curve recovery metrics + chart — both modes */}
+      <JCurveMetrics jStats={jStats} setupCost={analysis.setupCost} />
+      <Card>
+        <JCurveChart points={jCurvePoints} />
+      </Card>
 
       {/* Key metrics — flat mode only */}
       {!usageMode && (
@@ -450,6 +474,62 @@ export function Analyzer({
       </Card>
       </>
       )}
+    </div>
+  );
+}
+
+function JCurveMetrics({
+  jStats,
+  setupCost,
+}: {
+  jStats: ReturnType<typeof getJCurveStats>;
+  setupCost: number;
+}) {
+  const fmtMonths = (n: number) => (isFinite(n) ? `${Math.round(n)} months` : 'Never');
+  const opHealth = !isFinite(jStats.operationalBreakevenMonth)
+    ? 'danger'
+    : jStats.operationalBreakevenMonth <= 6
+    ? 'healthy'
+    : jStats.operationalBreakevenMonth <= 18
+    ? 'caution'
+    : 'danger';
+  const recHealth = !isFinite(jStats.setupRecoveryMonth)
+    ? 'danger'
+    : jStats.setupRecoveryMonth <= 12
+    ? 'healthy'
+    : jStats.setupRecoveryMonth <= 36
+    ? 'caution'
+    : 'danger';
+
+  return (
+    <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+      <Card>
+        <Metric
+          label="Monthly profit+ begins"
+          value={fmtMonths(jStats.operationalBreakevenMonth)}
+          sub="First month revenue exceeds costs"
+          health={opHealth}
+          tooltip="The first month where revenue from your projected customer ramp exceeds all costs (variable + fixed). Before this point the business loses money every month."
+        />
+      </Card>
+      <Card>
+        <Metric
+          label="Setup cost recovered"
+          value={fmtMonths(jStats.setupRecoveryMonth)}
+          sub={`Setup: ${formatGBP(setupCost)}`}
+          health={recHealth}
+          tooltip="How many months until cumulative profit pays back the setup investment. This is your true breakout point — when the business has paid for itself. Often much later than operational breakeven."
+        />
+      </Card>
+      <Card className="col-span-2 md:col-span-1">
+        <Metric
+          label="Total cash to breakout"
+          value={formatGBP(jStats.totalCashNeeded)}
+          sub="Setup + all losses before profitability"
+          health={jStats.totalCashNeeded === 0 ? 'healthy' : 'caution'}
+          tooltip="Your real funding requirement: setup cost plus every losing month before the business turns profitable. Many founders only budget the setup cost and run out of cash during the ramp."
+        />
+      </Card>
     </div>
   );
 }

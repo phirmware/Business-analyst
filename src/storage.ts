@@ -4,6 +4,7 @@ import type {
   BusinessAnalysis,
   DistributionData,
   IdeaFilterData,
+  SetupRecovery,
   UsagePricingData,
 } from './types';
 
@@ -43,6 +44,14 @@ export const defaultSettings: AppSettings = {
   darkMode: false,
   onboardingCompleted: false,
   activeId: null,
+};
+
+const DEFAULT_SETUP_RECOVERY: SetupRecovery = {
+  rampModel: 'linear',
+  steadyCustomers: 50,
+  linearStart: 10,
+  linearEnd: 100,
+  customPoints: [5, 20, 50, 100, 150],
 };
 
 const DEFAULT_DISTRIBUTION: DistributionData = {
@@ -102,6 +111,7 @@ export function hydrate(a: BusinessAnalysis): BusinessAnalysis {
     scorecard: { ...a.scorecard, q5Notes: a.scorecard?.q5Notes ?? '' },
     editHistory: a.editHistory ?? [],
     notes: a.notes ?? [],
+    setupRecovery: { ...DEFAULT_SETUP_RECOVERY, ...(a.setupRecovery ?? {}) },
   };
 }
 

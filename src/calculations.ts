@@ -1,7 +1,9 @@
 import type {
   BusinessAnalysis,
   FixedItem,
+  JCurvePoint,
   LineItem,
+  SetupRecovery,
   UsagePricingData,
 } from './types';
 import { DECILE_SHAPES } from './constants';
@@ -366,4 +368,67 @@ export function isUsageMode(a: BusinessAnalysis): boolean {
     a.pricingMode === 'hybrid' ||
     a.pricingMode === 'tiered'
   );
+}
+
+// --- J-Curve / Setup Cost Recovery ---
+
+const CUSTOM_RAMP_MONTHS = [1, 3, 6, 12, 24] as const;
+
+export function getCustomersByMonth(r: SetupRecovery, month: number): number {
+  if (r.rampModel === 'steady') return Math.max(0, r.steadyCustomers);
+
+  if (r.rampModel === 'linear') {
+    if (month <= 1) return Math.max(0, r.linearStart);
+    if (month >= 12) return Math.max(0, r.linearEnd);
+    const t = (month - 1) / 11;
+    return Math.max(0, r.linearStart + t * (r.linearEnd - r.linearStart));
+  }
+
+  // custom: interpolate between control points at months [1,3,6,12,24]
+  const pts = CUSTOM_RAMP_MONTHS;
+  const vals = r.customPoints;
+  if (month <= pts[0]) return Math.max(0, vals[0]);
+  if (month >= pts[pts.length - 1]) return Math.max(0, vals[vals.length - 1]);
+  for (let i = 0; i < pts.length - 1; i++) {
+    if (month >= pts[i] && month <= pts[i + 1]) {
+      const t = (month - pts[i]) / (pts[i + 1] - pts[i]);
+      return Math.max(0, vals[i] + t * (vals[i + 1] - vals[i]));
+    }
+  }
+  return Math.max(0, vals[vals.length - 1]);
+}
+
+export function calcJCurve(
+  avgContribPerCustomer: number,
+  fixedCostsPerMonth: number,
+  setupCost: number,
+  ramp: SetupRecovery,
+  maxMonths = 60
+): JCurvePoint[] {
+  const points: JCurvePoint[] = [
+    { month: 0, customers: 0, monthlyProfit: -fixedCostsPerMonth, cumulative: -(setupCost) },
+  ];
+  let cumulative = -setupCost;
+  for (let m = 1; m <= maxMonths; m++) {
+    const customers = getCustomersByMonth(ramp, m);
+    const monthlyProfit = customers * avgContribPerCustomer - fixedCostsPerMonth;
+    cumulative += monthlyProfit;
+    points.push({ month: m, customers, monthlyProfit, cumulative });
+  }
+  return points;
+}
+
+export function getJCurveStats(points: JCurvePoint[]): {
+  operationalBreakevenMonth: number;
+  setupRecoveryMonth: number;
+  totalCashNeeded: number;
+} {
+  const opMonth = points.slice(1).find((p) => p.monthlyProfit > 0);
+  const recMonth = points.slice(1).find((p) => p.cumulative > 0);
+  const minCumulative = Math.min(...points.map((p) => p.cumulative));
+  return {
+    operationalBreakevenMonth: opMonth ? opMonth.month : Infinity,
+    setupRecoveryMonth: recMonth ? recMonth.month : Infinity,
+    totalCashNeeded: Math.abs(Math.min(0, minCumulative)),
+  };
 }

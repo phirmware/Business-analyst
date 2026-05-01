@@ -104,6 +104,23 @@ export interface EditHistoryEntry {
   notes: string;
 }
 
+export type CustomerRampModel = 'steady' | 'linear' | 'custom';
+
+export interface SetupRecovery {
+  rampModel: CustomerRampModel;
+  steadyCustomers: number;
+  linearStart: number;
+  linearEnd: number;
+  customPoints: [number, number, number, number, number]; // months 1, 3, 6, 12, 24
+}
+
+export interface JCurvePoint {
+  month: number;
+  customers: number;
+  monthlyProfit: number;
+  cumulative: number;
+}
+
 export interface Note {
   id: string;
   title: string;
@@ -145,6 +162,8 @@ export interface BusinessAnalysis {
   editHistory?: EditHistoryEntry[];
   // Decision notes
   notes: Note[];
+  // Customer growth ramp for J-curve / setup cost recovery
+  setupRecovery: SetupRecovery;
 }
 
 export type AiProvider = 'openai' | 'openrouter' | 'anthropic' | 'custom';

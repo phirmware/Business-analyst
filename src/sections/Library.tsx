@@ -526,6 +526,47 @@ const CARDS: LibraryCard[] = [
       </ul>
     ),
   },
+  {
+    id: 'j-curve',
+    title: 'The J-Curve: Why You Need More Cash Than Setup Cost',
+    blurb: 'Founders calculate setup cost, look at their savings, and think they have a buffer. They usually don\'t.',
+    tags: ['fundamentals', 'cash-flow', 'setup-cost'],
+    body: (
+      <div className="space-y-3 text-sm text-slate-600 dark:text-slate-300">
+        <p>
+          Every business has a J-curve. You spend money setting up, you lose money for months while
+          customer acquisition ramps, and only later does the business turn profitable and start
+          paying back what you put in.
+        </p>
+        <p>
+          The trap: founders calculate setup cost (£20k to launch), look at their savings (£25k), and
+          think they have a £5k buffer. They don't. They have a −£15k buffer.
+        </p>
+        <p>Here's why: between launch and operational breakeven, the business loses money every month
+          — fixed costs are paid in full but customer revenue is still ramping. Add up those losses
+          and they often dwarf the setup cost itself.</p>
+        <div className="bg-slate-100 dark:bg-slate-800 rounded-lg p-3 font-medium text-slate-800 dark:text-slate-100 text-xs">
+          Total cash needed to reach breakout = setup cost + sum of all monthly losses before profitability
+        </div>
+        <p><strong>Example:</strong></p>
+        <ul className="list-disc list-inside space-y-1 ml-2">
+          <li>Setup cost: £20k</li>
+          <li>Months 1–6 losing £3k/month while customers ramp: £18k cumulative loss</li>
+          <li>Total cash needed before the business pays for itself: <strong>£38k, not £20k</strong></li>
+        </ul>
+        <p>
+          If you only fund the setup cost, you're guaranteeing the business dies during the ramp. The
+          graveyard of failed startups is full of businesses that would have worked if the founders had
+          funded the J-curve.
+        </p>
+        <p className="font-medium text-slate-800 dark:text-slate-100">
+          Lesson: always plan your runway against total-cash-to-breakout, not setup cost alone. The
+          Analyzer calculates this for you — enter your customer ramp in the "How fast will customers
+          grow?" section and check the J-curve chart. Trust the larger number.
+        </p>
+      </div>
+    ),
+  },
 ];
 
 export function Library() {

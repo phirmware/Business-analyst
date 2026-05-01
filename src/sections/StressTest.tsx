@@ -1,11 +1,13 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { BusinessAnalysis } from '../types';
 import {
+  calcJCurve,
   calcUnitEconomics,
   calcUsageEconomics,
   formatGBP,
   formatNum,
   formatPct,
+  getJCurveStats,
   healthContribution,
   healthProfit,
   isUsageMode,
@@ -523,6 +525,7 @@ export function StressTest({ analysis }: { analysis: BusinessAnalysis }) {
                 <th className="text-right py-2 pr-4">Breakeven</th>
                 <th className="text-right py-2 pr-4">Monthly profit</th>
                 <th className="text-right py-2 pr-4">Runway</th>
+                <th className="text-right py-2 pr-4">Setup recovery</th>
                 <th className="text-left py-2">Verdict</th>
               </tr>
             </thead>
@@ -537,6 +540,8 @@ export function StressTest({ analysis }: { analysis: BusinessAnalysis }) {
                     : (analysis.cashReserve + loss) / -r.monthlyProfit;
                 const vr = verdict(r.monthlyProfit, runway);
                 const health = healthContribution(r.contributionMarginPct);
+                const jPts = calcJCurve(r.contributionPerUnit, r.totalFixedCosts, analysis.setupCost, analysis.setupRecovery);
+                const jStats = getJCurveStats(jPts);
                 return (
                   <tr key={s.key} className="align-middle">
                     <td className="py-2 pr-4">
@@ -571,6 +576,9 @@ export function StressTest({ analysis }: { analysis: BusinessAnalysis }) {
                         ? runway.toFixed(1) + ' mo'
                         : '—'}
                     </td>
+                    <td className={`py-2 pr-4 text-right font-mono ${!isFinite(jStats.setupRecoveryMonth) ? 'text-danger font-semibold' : ''}`}>
+                      {isFinite(jStats.setupRecoveryMonth) ? `${Math.round(jStats.setupRecoveryMonth)} mo` : 'Never'}
+                    </td>
                     <td className="py-2">
                       <HealthBadge health={vr.kind} label={vr.label} />
                     </td>
@@ -600,6 +608,7 @@ function UsageSurvivalMatrix({ analysis }: { analysis: BusinessAnalysis }) {
               <th className="text-right py-2 pr-4">True CAC</th>
               <th className="text-right py-2 pr-4">LTV</th>
               <th className="text-right py-2 pr-4">LTV:CAC</th>
+              <th className="text-right py-2 pr-4">Setup recovery</th>
               <th className="text-left py-2">Verdict</th>
             </tr>
           </thead>
@@ -607,6 +616,8 @@ function UsageSurvivalMatrix({ analysis }: { analysis: BusinessAnalysis }) {
             {USAGE_SCENARIOS.map((s) => {
               const modified = s.apply(analysis);
               const ue = calcUsageEconomics(modified);
+              const jPts = calcJCurve(ue.avgContributionPerCustomer, ue.monthlyFixedCosts, analysis.setupCost, analysis.setupRecovery);
+              const jStats = getJCurveStats(jPts);
               const survives =
                 ue.monthlyProfit >= 0 && isFinite(ue.ltvToCacRatio) && ue.ltvToCacRatio >= 1.5;
               const fragile =
@@ -645,6 +656,9 @@ function UsageSurvivalMatrix({ analysis }: { analysis: BusinessAnalysis }) {
                     }`}
                   >
                     {ratio}
+                  </td>
+                  <td className={`py-2 pr-4 text-right font-mono ${!isFinite(jStats.setupRecoveryMonth) ? 'text-danger font-semibold' : ''}`}>
+                    {isFinite(jStats.setupRecoveryMonth) ? `${Math.round(jStats.setupRecoveryMonth)} mo` : 'Never'}
                   </td>
                   <td className="py-2">
                     <HealthBadge health={kind} label={label} />

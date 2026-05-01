@@ -1,10 +1,12 @@
 import { useMemo } from 'react';
 import type { BusinessAnalysis, ScorecardAnswers } from '../types';
 import {
+  calcJCurve,
   calcUnitEconomics,
   calcUsageEconomics,
   formatGBP,
   formatPct,
+  getJCurveStats,
   isUsageMode,
   type Health,
 } from '../calculations';
@@ -39,6 +41,17 @@ export function Scorecard({
 }) {
   const ue = useMemo(() => calcUnitEconomics(analysis), [analysis]);
   const s = analysis.scorecard;
+
+  const jStats = useMemo(() => {
+    const usageMode = isUsageMode(analysis);
+    const contrib = usageMode
+      ? calcUsageEconomics(analysis).avgContributionPerCustomer
+      : ue.contributionPerUnit;
+    const fixed = usageMode
+      ? calcUsageEconomics(analysis).monthlyFixedCosts
+      : ue.totalFixedCosts;
+    return getJCurveStats(calcJCurve(contrib, fixed, analysis.setupCost, analysis.setupRecovery));
+  }, [analysis, ue]);
 
   const update = (patch: Partial<ScorecardAnswers>) =>
     onChange({ scorecard: { ...analysis.scorecard, ...patch } });
@@ -227,6 +240,9 @@ export function Scorecard({
             />
           </Field>
         </div>
+        {jStats.setupRecoveryMonth > 0 && s.q4Runway > 0 && (
+          <RunwayHint runway={s.q4Runway} recoveryMonth={jStats.setupRecoveryMonth} totalCash={jStats.totalCashNeeded} />
+        )}
         <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-4">
           <Field label="Regulatory risks that could kill this">
             <TextInput
@@ -621,6 +637,43 @@ function ScorePill({ label, health }: { label: string; health: Health }) {
     <div className={`rounded-lg border px-3 py-2 text-sm ${bg}`}>
       <div className="text-xs opacity-80">{label}</div>
       <div className="font-semibold">{healthLabel(health)}</div>
+    </div>
+  );
+}
+
+function RunwayHint({
+  runway,
+  recoveryMonth,
+  totalCash,
+}: {
+  runway: number;
+  recoveryMonth: number;
+  totalCash: number;
+}) {
+  const never = !isFinite(recoveryMonth);
+  const ratio = never ? 0 : runway / recoveryMonth;
+  const color =
+    never || ratio < 1
+      ? 'bg-red-50 dark:bg-red-950/40 border-red-200 dark:border-red-800 text-red-800 dark:text-red-300'
+      : ratio < 1.5
+      ? 'bg-amber-50 dark:bg-amber-950/40 border-amber-200 dark:border-amber-800 text-amber-800 dark:text-amber-300'
+      : 'bg-green-50 dark:bg-green-950/40 border-green-200 dark:border-green-800 text-green-800 dark:text-green-300';
+
+  return (
+    <div className={`mt-3 rounded-md border px-3 py-2.5 text-xs ${color}`}>
+      <div className="font-semibold mb-0.5">
+        {never
+          ? 'Setup costs may not be recovered at this ramp'
+          : ratio >= 1.5
+          ? `Runway is comfortable — ${runway} months vs ${Math.round(recoveryMonth)} months to setup recovery`
+          : ratio >= 1
+          ? `Runway is tight — ${runway} months of cash, ${Math.round(recoveryMonth)} months to setup recovery`
+          : `Runway may be insufficient — ${runway} months of cash vs ${Math.round(recoveryMonth)} months to setup recovery`}
+      </div>
+      <div className="opacity-80">
+        Total cash to breakout: <strong>{formatGBP(totalCash)}</strong> (setup cost + all monthly losses before profitability).
+        Enter your ramp in the Analyzer to refine this estimate.
+      </div>
     </div>
   );
 }

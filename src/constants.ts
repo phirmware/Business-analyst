@@ -456,6 +456,13 @@ export function newAnalysis(name = 'New business'): BusinessAnalysis {
     ideaFilter: defaultIdeaFilter(),
     chat: [],
     notes: [],
+    setupRecovery: {
+      rampModel: 'linear',
+      steadyCustomers: 50,
+      linearStart: 10,
+      linearEnd: 100,
+      customPoints: [5, 20, 50, 100, 150],
+    },
   };
 }
 

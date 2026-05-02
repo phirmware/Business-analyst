@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { BusinessAnalysis, CostType, FixedItem, LineItem, PricingMode } from '../types';
 import {
   calcJCurve,
@@ -14,7 +14,7 @@ import {
   isUsageMode,
 } from '../calculations';
 import { INDUSTRIES, PRICING_MODE_OPTIONS, PRICING_MODELS, TOOLTIPS } from '../constants';
-import { UsagePricingHealth, UsagePricingInputs } from './UsagePricing';
+import { UsagePricingInputs, UsageUnitMetrics, UsageMonthlyMetrics, UsageCustomerMetrics } from './UsagePricing';
 import { uid } from '../storage';
 import { exportAnalysisMarkdown, downloadPdf } from '../export';
 import {
@@ -338,14 +338,50 @@ export function Analyzer({
 
       <SetupRecoveryInputs analysis={analysis} onChange={onChange} />
 
-      {/* Usage mode outputs */}
-      {usageMode && <UsagePricingHealth analysis={analysis} />}
+      {/* Usage mode outputs — 3 grouped sections */}
+      {usageMode && ue2 && (
+        <>
+          <SectionDivider
+            title={`Per ${analysis.usagePricing.consumptionUnitLabel || 'unit'} of service`}
+            sub="Economics of delivering one unit — these numbers don't change with customer count"
+          />
+          <UsageUnitMetrics analysis={analysis} />
 
-      {/* J-curve recovery metrics + chart — both modes */}
-      <JCurveMetrics jStats={jStats} setupCost={analysis.setupCost} />
-      <Card>
-        <JCurveChart points={jCurvePoints} />
-      </Card>
+          <SectionDivider
+            title="This month"
+            sub={`At your current ${ue2.payingCustomers} paying customer${ue2.payingCustomers !== 1 ? 's' : ''} — change the paying customers input above to update`}
+          />
+          <UsageMonthlyMetrics analysis={analysis} />
+          <BreakevenCombinations
+            fixedCosts={ue2.monthlyFixedCosts}
+            contribPerUnit={ue2.contributionPerConsumptionUnit}
+            avgUnitsPerCustomer={analysis.usagePricing.averageUnitsPerCustomer}
+            unitLabel={analysis.usagePricing.consumptionUnitLabel || 'unit'}
+            currentCustomers={analysis.unitsPerMonth}
+          />
+
+          <SectionDivider
+            title="Customer growth & setup recovery"
+            sub="How long until the business pays for itself — driven by your customer ramp model below"
+          />
+          <UsageCustomerMetrics analysis={analysis} />
+          <SetupRecoveryInputs analysis={analysis} onChange={onChange} />
+          <JCurveMetrics jStats={jStats} setupCost={analysis.setupCost} />
+          <Card>
+            <JCurveChart points={jCurvePoints} />
+          </Card>
+        </>
+      )}
+
+      {/* Flat mode J-curve recovery metrics + chart */}
+      {!usageMode && (
+        <>
+          <JCurveMetrics jStats={jStats} setupCost={analysis.setupCost} />
+          <Card>
+            <JCurveChart points={jCurvePoints} />
+          </Card>
+        </>
+      )}
 
       {/* Key metrics — flat mode only */}
       {!usageMode && (
@@ -478,6 +514,15 @@ export function Analyzer({
   );
 }
 
+function SectionDivider({ title, sub }: { title: string; sub?: string }) {
+  return (
+    <div className="pt-2 pb-1 border-b border-slate-200 dark:border-slate-700">
+      <h3 className="text-base font-semibold text-slate-700 dark:text-slate-300">{title}</h3>
+      {sub && <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{sub}</p>}
+    </div>
+  );
+}
+
 function JCurveMetrics({
   jStats,
   setupCost,
@@ -531,6 +576,147 @@ function JCurveMetrics({
         />
       </Card>
     </div>
+  );
+}
+
+function BreakevenCombinations({
+  fixedCosts,
+  contribPerUnit,
+  avgUnitsPerCustomer,
+  unitLabel,
+  currentCustomers,
+}: {
+  fixedCosts: number;
+  contribPerUnit: number;
+  avgUnitsPerCustomer: number;
+  unitLabel: string;
+  currentCustomers: number;
+}) {
+  if (contribPerUnit <= 0) return null;
+
+  const breakevenUnits = fixedCosts / contribPerUnit;
+  const label = unitLabel.toLowerCase();
+  const defaultCustomers = Math.max(1, currentCustomers);
+
+  const [customers, setCustomers] = useState(defaultCustomers);
+  const [unitsPerCustomer, setUnitsPerCustomer] = useState(avgUnitsPerCustomer);
+
+  const totalUnits = customers * unitsPerCustomer;
+  const monthlyProfit = totalUnits * contribPerUnit - fixedCosts;
+  const gap = totalUnits - breakevenUnits;
+  const aboveBreakeven = gap >= 0;
+
+  const maxCustomers = Math.max(30, defaultCustomers * 3);
+  const maxUnitsPerCustomer = Math.max(40, avgUnitsPerCustomer * 4);
+
+  return (
+    <Card title={`${unitLabel} breakeven explorer`}>
+      {/* Breakeven anchor */}
+      <div className="mb-5 p-3 rounded-lg bg-slate-50 dark:bg-slate-800 text-sm">
+        <span className="text-slate-500 dark:text-slate-400">Breakeven target: </span>
+        <strong className="text-slate-800 dark:text-slate-100">
+          {Math.ceil(breakevenUnits)} {label}s / month
+        </strong>
+        <span className="text-slate-400 dark:text-slate-500 ml-2 text-xs">
+          (£{fixedCosts.toFixed(0)} fixed costs ÷ £{contribPerUnit.toFixed(2)} margin per {label})
+        </span>
+      </div>
+
+      {/* Sliders */}
+      <div className="space-y-5 mb-6">
+        <div>
+          <div className="flex justify-between items-center mb-1.5">
+            <label className="text-sm font-medium text-slate-700 dark:text-slate-300">
+              Number of customers
+            </label>
+            <span className="text-sm font-semibold text-slate-800 dark:text-slate-100 tabular-nums">
+              {customers}
+            </span>
+          </div>
+          <input
+            type="range"
+            min={1}
+            max={maxCustomers}
+            value={customers}
+            onChange={(e) => setCustomers(Number(e.target.value))}
+            className="w-full accent-indigo-600"
+          />
+          <div className="flex justify-between text-xs text-slate-400 mt-0.5">
+            <span>1</span><span>{maxCustomers}</span>
+          </div>
+        </div>
+
+        <div>
+          <div className="flex justify-between items-center mb-1.5">
+            <label className="text-sm font-medium text-slate-700 dark:text-slate-300">
+              {unitLabel}s per customer per month
+            </label>
+            <span className="text-sm font-semibold text-slate-800 dark:text-slate-100 tabular-nums">
+              {unitsPerCustomer}
+            </span>
+          </div>
+          <input
+            type="range"
+            min={1}
+            max={maxUnitsPerCustomer}
+            value={unitsPerCustomer}
+            onChange={(e) => setUnitsPerCustomer(Number(e.target.value))}
+            className="w-full accent-indigo-600"
+          />
+          <div className="flex justify-between text-xs text-slate-400 mt-0.5">
+            <span>1</span><span>{maxUnitsPerCustomer}</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Results */}
+      <div className={`rounded-xl p-4 border ${
+        aboveBreakeven
+          ? 'bg-green-50 dark:bg-green-950/30 border-green-200 dark:border-green-800'
+          : 'bg-red-50 dark:bg-red-950/30 border-red-200 dark:border-red-800'
+      }`}>
+        <div className="grid grid-cols-3 gap-4 text-center">
+          <div>
+            <div className="text-xs text-slate-500 dark:text-slate-400 mb-0.5 uppercase tracking-wide">
+              Total {label}s
+            </div>
+            <div className="text-2xl font-bold text-slate-800 dark:text-slate-100">
+              {totalUnits}
+            </div>
+            <div className="text-xs text-slate-400 mt-0.5">
+              vs {Math.ceil(breakevenUnits)} needed
+            </div>
+          </div>
+          <div>
+            <div className="text-xs text-slate-500 dark:text-slate-400 mb-0.5 uppercase tracking-wide">
+              {aboveBreakeven ? 'Surplus' : 'Shortfall'}
+            </div>
+            <div className={`text-2xl font-bold ${aboveBreakeven ? 'text-healthy' : 'text-danger'}`}>
+              {aboveBreakeven ? '+' : ''}{Math.round(gap)} {label}s
+            </div>
+            <div className="text-xs text-slate-400 mt-0.5">
+              {aboveBreakeven ? 'above breakeven' : 'below breakeven'}
+            </div>
+          </div>
+          <div>
+            <div className="text-xs text-slate-500 dark:text-slate-400 mb-0.5 uppercase tracking-wide">
+              Monthly profit
+            </div>
+            <div className={`text-2xl font-bold ${monthlyProfit >= 0 ? 'text-healthy' : 'text-danger'}`}>
+              {monthlyProfit >= 0 ? '+' : ''}£{Math.round(monthlyProfit).toLocaleString()}
+            </div>
+            <div className="text-xs text-slate-400 mt-0.5">after fixed costs</div>
+          </div>
+        </div>
+      </div>
+
+      <button
+        onClick={() => { setCustomers(defaultCustomers); setUnitsPerCustomer(avgUnitsPerCustomer); }}
+        className="mt-3 text-xs text-indigo-600 dark:text-indigo-400 hover:underline"
+      >
+        Reset to model defaults ({defaultCustomers} customers × {avgUnitsPerCustomer} {label}s)
+      </button>
+    </Card>
   );
 }
 

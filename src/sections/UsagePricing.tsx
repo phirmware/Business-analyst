@@ -401,7 +401,8 @@ export function UsagePricingInputs({
 
 // ─── Health outputs ──────────────────────────────────────────────────────────
 
-export function UsagePricingHealth({ analysis }: { analysis: BusinessAnalysis }) {
+// ─── Section 1: Per-unit economics ───────────────────────────────────────────
+export function UsageUnitMetrics({ analysis }: { analysis: BusinessAnalysis }) {
   const ue = useMemo(() => calcUsageEconomics(analysis), [analysis]);
   const u = analysis.usagePricing;
   const unitLabel = u.consumptionUnitLabel || 'unit';
@@ -412,20 +413,10 @@ export function UsagePricingHealth({ analysis }: { analysis: BusinessAnalysis })
       : ue.p25Contribution >= 0
       ? 'caution'
       : 'danger';
-  const ltvCacHealth =
-    ue.ltvToCacRatio >= 3 ? 'healthy' : ue.ltvToCacRatio >= 1.5 ? 'caution' : 'danger';
   const supplierHealth =
     ue.supplierDependencyPct < 40 ? 'healthy' : ue.supplierDependencyPct < 70 ? 'caution' : 'danger';
   const whaleHealth =
     ue.top10PctShare < 35 ? 'healthy' : ue.top10PctShare < 55 ? 'caution' : 'danger';
-  const paybackHealth =
-    !isFinite(ue.paybackMonths)
-      ? 'danger'
-      : ue.paybackMonths <= 6
-      ? 'healthy'
-      : ue.paybackMonths <= 18
-      ? 'caution'
-      : 'danger';
   const marginHealth =
     ue.consumptionMarginPct >= 40 ? 'healthy' : ue.consumptionMarginPct >= 15 ? 'caution' : 'danger';
 
@@ -434,37 +425,40 @@ export function UsagePricingHealth({ analysis }: { analysis: BusinessAnalysis })
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
         <Card>
           <Metric
-            label="True CAC"
-            value={formatGBP(ue.trueCAC)}
-            sub={`Direct ${formatGBP(ue.directCAC)} + free-tier drag ${formatGBP(ue.freeTierDragPerPaying)}`}
-            tooltip={TOOLTIPS.trueCAC}
-            large
+            label={`Revenue per ${unitLabel}`}
+            value={formatGBP(ue.pricePerConsumptionUnit)}
+            sub={`Price charged per ${unitLabel} of service`}
           />
         </Card>
         <Card>
           <Metric
-            label="LTV"
-            value={formatGBP(ue.ltv)}
-            sub={`Lifetime ${ue.effectiveLifetimeMonths.toFixed(1)} mo · avg contrib ${formatGBP(ue.avgContributionPerCustomer)}/mo`}
-            large
+            label={`Variable cost per ${unitLabel}`}
+            value={formatGBP(ue.variableCostPerConsumptionUnit)}
+            sub={`All costs that scale with each ${unitLabel} delivered`}
           />
         </Card>
         <Card>
           <Metric
-            label="LTV : True-CAC"
-            value={isFinite(ue.ltvToCacRatio) ? `${ue.ltvToCacRatio.toFixed(1)}×` : '∞'}
-            sub="Healthy ≥ 3× · Fragile < 1.5×"
-            health={ltvCacHealth}
-            large
+            label={`Contribution per ${unitLabel}`}
+            value={formatGBP(ue.contributionPerConsumptionUnit)}
+            sub={
+              <span className="font-mono">
+                £{ue.pricePerConsumptionUnit.toFixed(2)} − £{ue.variableCostPerConsumptionUnit.toFixed(2)}
+              </span>
+            }
+            health={marginHealth}
           />
         </Card>
         <Card>
           <Metric
-            label="CAC payback"
-            value={isFinite(ue.paybackMonths) ? `${ue.paybackMonths.toFixed(1)} mo` : 'Never'}
-            sub="Months until a paying customer recovers True CAC"
-            health={paybackHealth}
-            large
+            label="Per-unit margin"
+            value={formatPct(ue.consumptionMarginPct)}
+            sub={
+              <span className="font-mono">
+                £{ue.contributionPerConsumptionUnit.toFixed(2)} ÷ £{ue.pricePerConsumptionUnit.toFixed(2)}
+              </span>
+            }
+            health={marginHealth}
           />
         </Card>
       </div>
@@ -472,17 +466,16 @@ export function UsagePricingHealth({ analysis }: { analysis: BusinessAnalysis })
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
         <Card>
           <Metric
-            label="Per-unit margin"
-            value={formatPct(ue.consumptionMarginPct)}
-            sub={`${formatGBP(ue.contributionPerConsumptionUnit)} contribution / ${unitLabel}`}
-            health={marginHealth}
+            label={`Avg ${unitLabel}s per customer / mo`}
+            value={formatNum(u.averageUnitsPerCustomer)}
+            sub={`Avg contribution per customer: ${formatGBP(ue.avgContributionPerCustomer)}/mo`}
           />
         </Card>
         <Card>
           <Metric
             label="Supplier dependency"
             value={formatPct(ue.supplierDependencyPct)}
-            sub={`3rd-party ${formatGBP(ue.thirdPartyCostPerConsumptionUnit)} / ${unitLabel}`}
+            sub={`£${ue.thirdPartyCostPerConsumptionUnit.toFixed(2)} 3rd-party of £${ue.variableCostPerConsumptionUnit.toFixed(2)} variable`}
             health={supplierHealth}
             tooltip={TOOLTIPS.supplierDependency}
           />
@@ -509,12 +502,12 @@ export function UsagePricingHealth({ analysis }: { analysis: BusinessAnalysis })
         </Card>
       </div>
 
-      <Card title="Contribution across customer percentiles (monthly)">
+      <Card title={`Contribution across customer percentiles (monthly, per ${unitLabel})`}>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          <PctBlock label="p25 (low)" units={u.p25Units} contribution={ue.p25Contribution} unitLabel={unitLabel} />
-          <PctBlock label="p50 (median)" units={u.p50Units} contribution={ue.p50Contribution} unitLabel={unitLabel} />
-          <PctBlock label="p75" units={u.p75Units} contribution={ue.p75Contribution} unitLabel={unitLabel} />
-          <PctBlock label="p90 (whale)" units={u.p90Units} contribution={ue.p90Contribution} unitLabel={unitLabel} />
+          <PctBlock label="p25 (low)" units={u.p25Units} contribution={ue.p25Contribution} unitLabel={unitLabel} pricePerUnit={ue.pricePerConsumptionUnit} varCostPerUnit={ue.variableCostPerConsumptionUnit} />
+          <PctBlock label="p50 (median)" units={u.p50Units} contribution={ue.p50Contribution} unitLabel={unitLabel} pricePerUnit={ue.pricePerConsumptionUnit} varCostPerUnit={ue.variableCostPerConsumptionUnit} />
+          <PctBlock label="p75" units={u.p75Units} contribution={ue.p75Contribution} unitLabel={unitLabel} pricePerUnit={ue.pricePerConsumptionUnit} varCostPerUnit={ue.variableCostPerConsumptionUnit} />
+          <PctBlock label="p90 (whale)" units={u.p90Units} contribution={ue.p90Contribution} unitLabel={unitLabel} pricePerUnit={ue.pricePerConsumptionUnit} varCostPerUnit={ue.variableCostPerConsumptionUnit} />
         </div>
         <p className="mt-3 text-xs text-slate-500 dark:text-slate-400">
           If p25 is negative and p90 is huge, you have a whale-and-mouse business — one churn event can collapse revenue.
@@ -527,38 +520,137 @@ export function UsagePricingHealth({ analysis }: { analysis: BusinessAnalysis })
           Left decile = lowest-usage 10% of customers. Right decile = top 10%. Power-law means the rightmost bar dwarfs the rest.
         </p>
       </Card>
+    </>
+  );
+}
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
-        <Card>
-          <Metric
-            label="Paying customers / mo"
-            value={formatNum(ue.payingCustomers)}
-            sub="Uses the 'Units sold per month' field above"
-          />
-        </Card>
-        <Card>
-          <Metric
-            label="Monthly revenue"
-            value={formatGBP(ue.monthlyRevenue)}
-            sub={`ARPU ${formatGBP(ue.avgRevenuePerCustomer)}`}
-          />
-        </Card>
-        <Card>
-          <Metric
-            label="Monthly variable cost"
-            value={formatGBP(ue.monthlyVariableCosts)}
-            sub={`Per customer: ${formatGBP(ue.avgVariableCostPerCustomer)}`}
-          />
-        </Card>
-        <Card>
-          <Metric
-            label="Monthly profit (usage)"
-            value={formatGBP(ue.monthlyProfit)}
-            sub={`Annual: ${formatGBP(ue.annualProfit)}`}
-            health={ue.monthlyProfit > 0 ? 'healthy' : ue.monthlyProfit === 0 ? 'caution' : 'danger'}
-          />
-        </Card>
-      </div>
+// ─── Section 2: Monthly snapshot ─────────────────────────────────────────────
+export function UsageMonthlyMetrics({ analysis }: { analysis: BusinessAnalysis }) {
+  const ue = useMemo(() => calcUsageEconomics(analysis), [analysis]);
+  const u = analysis.usagePricing;
+  const unitLabel = (u.consumptionUnitLabel || 'unit').toLowerCase();
+  const avgUnits = u.averageUnitsPerCustomer;
+  const price = ue.pricePerConsumptionUnit;
+  const varCost = ue.variableCostPerConsumptionUnit;
+
+  return (
+    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
+      <Card>
+        <Metric
+          label="Monthly revenue"
+          value={formatGBP(ue.monthlyRevenue)}
+          sub={
+            <span className="font-mono text-xs">
+              {ue.payingCustomers} × {avgUnits}{unitLabel}s × £{price.toFixed(2)}
+            </span>
+          }
+        />
+      </Card>
+      <Card>
+        <Metric
+          label="Monthly variable costs"
+          value={formatGBP(ue.monthlyVariableCosts)}
+          sub={
+            <span className="font-mono text-xs">
+              {ue.payingCustomers} × {avgUnits}{unitLabel}s × £{varCost.toFixed(2)}
+            </span>
+          }
+        />
+      </Card>
+      <Card>
+        <Metric
+          label="Monthly fixed costs"
+          value={formatGBP(ue.monthlyFixedCosts)}
+          sub={`${analysis.fixedCosts.length} fixed item${analysis.fixedCosts.length !== 1 ? 's' : ''} — same every month`}
+        />
+      </Card>
+      <Card>
+        <Metric
+          label="Monthly profit"
+          value={formatGBP(ue.monthlyProfit)}
+          sub={
+            <span className="font-mono text-xs">
+              £{ue.monthlyRevenue.toFixed(0)} − £{ue.monthlyVariableCosts.toFixed(0)} − £{ue.monthlyFixedCosts.toFixed(0)}
+            </span>
+          }
+          health={ue.monthlyProfit > 0 ? 'healthy' : ue.monthlyProfit === 0 ? 'caution' : 'danger'}
+        />
+      </Card>
+    </div>
+  );
+}
+
+// ─── Section 3: Customer lifetime value (for growth section) ─────────────────
+export function UsageCustomerMetrics({ analysis }: { analysis: BusinessAnalysis }) {
+  const ue = useMemo(() => calcUsageEconomics(analysis), [analysis]);
+
+  const ltvCacHealth =
+    ue.ltvToCacRatio >= 3 ? 'healthy' : ue.ltvToCacRatio >= 1.5 ? 'caution' : 'danger';
+  const paybackHealth =
+    !isFinite(ue.paybackMonths)
+      ? 'danger'
+      : ue.paybackMonths <= 6
+      ? 'healthy'
+      : ue.paybackMonths <= 18
+      ? 'caution'
+      : 'danger';
+
+  return (
+    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
+      <Card>
+        <Metric
+          label="True CAC"
+          value={formatGBP(ue.trueCAC)}
+          sub={`Direct ${formatGBP(ue.directCAC)} + free-tier drag ${formatGBP(ue.freeTierDragPerPaying)}`}
+          tooltip={TOOLTIPS.trueCAC}
+          large
+        />
+      </Card>
+      <Card>
+        <Metric
+          label="LTV"
+          value={formatGBP(ue.ltv)}
+          sub={
+            <span className="font-mono text-xs">
+              £{ue.avgContributionPerCustomer.toFixed(2)}/mo × {Math.min(ue.effectiveLifetimeMonths, 60).toFixed(0)} mo lifetime
+            </span>
+          }
+          large
+        />
+      </Card>
+      <Card>
+        <Metric
+          label="LTV : True-CAC"
+          value={isFinite(ue.ltvToCacRatio) ? `${ue.ltvToCacRatio.toFixed(1)}×` : '∞'}
+          sub="Healthy ≥ 3× · Fragile < 1.5×"
+          health={ltvCacHealth}
+          large
+        />
+      </Card>
+      <Card>
+        <Metric
+          label="CAC payback"
+          value={isFinite(ue.paybackMonths) ? `${ue.paybackMonths.toFixed(1)} mo` : 'Never'}
+          sub={
+            isFinite(ue.paybackMonths)
+              ? <span className="font-mono text-xs">£{ue.trueCAC.toFixed(2)} CAC ÷ £{ue.avgContributionPerCustomer.toFixed(2)}/mo</span>
+              : 'Months until a paying customer recovers True CAC'
+          }
+          health={paybackHealth}
+          large
+        />
+      </Card>
+    </div>
+  );
+}
+
+// ─── Legacy combined export (kept for backward compat) ────────────────────────
+export function UsagePricingHealth({ analysis }: { analysis: BusinessAnalysis }) {
+  return (
+    <>
+      <UsageCustomerMetrics analysis={analysis} />
+      <UsageUnitMetrics analysis={analysis} />
+      <UsageMonthlyMetrics analysis={analysis} />
     </>
   );
 }
@@ -570,11 +662,15 @@ function PctBlock({
   units,
   contribution,
   unitLabel,
+  pricePerUnit,
+  varCostPerUnit,
 }: {
   label: string;
   units: number;
   contribution: number;
   unitLabel: string;
+  pricePerUnit: number;
+  varCostPerUnit: number;
 }) {
   const color =
     contribution > 0 ? 'text-healthy' : contribution === 0 ? 'text-caution' : 'text-danger';
@@ -583,9 +679,12 @@ function PctBlock({
       <div className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">
         {label}
       </div>
-      <div className={`text-lg md:text-xl font-semibold ${color}`}>{formatGBP(contribution)}</div>
+      <div className={`text-lg md:text-xl font-semibold ${color}`}>{formatGBP(contribution)}/mo</div>
       <div className="text-xs text-slate-500 dark:text-slate-400 mt-1">
         {formatNum(units)} {unitLabel}/mo
+      </div>
+      <div className="text-xs font-mono text-slate-400 dark:text-slate-500 mt-1">
+        {units} × (£{pricePerUnit.toFixed(2)} − £{varCostPerUnit.toFixed(2)})
       </div>
     </div>
   );

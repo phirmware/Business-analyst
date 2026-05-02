@@ -403,17 +403,25 @@ export function calcJCurve(
   fixedCostsPerMonth: number,
   setupCost: number,
   ramp: SetupRecovery,
-  maxMonths = 60
+  maxMonths = 60,
+  churnOpts?: { monthlyChurnPct: number; cac: number }
 ): JCurvePoint[] {
   const points: JCurvePoint[] = [
     { month: 0, customers: 0, monthlyProfit: -fixedCostsPerMonth, cumulative: -(setupCost) },
   ];
   let cumulative = -setupCost;
+  let prevCustomers = 0;
   for (let m = 1; m <= maxMonths; m++) {
     const customers = getCustomersByMonth(ramp, m);
-    const monthlyProfit = customers * avgContribPerCustomer - fixedCostsPerMonth;
+    let monthlyProfit = customers * avgContribPerCustomer - fixedCostsPerMonth;
+    if (churnOpts && churnOpts.monthlyChurnPct > 0) {
+      const churnedOut = prevCustomers * (churnOpts.monthlyChurnPct / 100);
+      const acquisitionsNeeded = Math.max(0, customers - prevCustomers + churnedOut);
+      monthlyProfit -= acquisitionsNeeded * churnOpts.cac;
+    }
     cumulative += monthlyProfit;
     points.push({ month: m, customers, monthlyProfit, cumulative });
+    prevCustomers = customers;
   }
   return points;
 }

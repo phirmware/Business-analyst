@@ -62,6 +62,7 @@ export function Analyzer({
   const ue = useMemo(() => calcUnitEconomics(analysis), [analysis]);
   const usageMode = isUsageMode(analysis);
   const ue2 = useMemo(() => (usageMode ? calcUsageEconomics(analysis) : null), [analysis, usageMode]);
+  const [churnAdjusted, setChurnAdjusted] = useState(false);
   const jCurvePoints = useMemo(() => {
     const contrib = usageMode
       ? (ue2?.avgContributionPerCustomer ?? 0)
@@ -69,8 +70,11 @@ export function Analyzer({
     const fixed = usageMode
       ? (ue2?.monthlyFixedCosts ?? 0)
       : ue.totalFixedCosts;
-    return calcJCurve(contrib, fixed, analysis.setupCost, analysis.setupRecovery);
-  }, [analysis, usageMode, ue, ue2]);
+    const churnOpts = (churnAdjusted && usageMode)
+      ? { monthlyChurnPct: analysis.usagePricing.monthlyChurnPct, cac: analysis.usagePricing.directCAC }
+      : undefined;
+    return calcJCurve(contrib, fixed, analysis.setupCost, analysis.setupRecovery, 60, churnOpts);
+  }, [analysis, usageMode, ue, ue2, churnAdjusted]);
   const jStats = useMemo(() => getJCurveStats(jCurvePoints), [jCurvePoints]);
   const nameRef = useRef<HTMLInputElement | null>(null);
 
@@ -367,6 +371,12 @@ export function Analyzer({
           <UsageCustomerMetrics analysis={analysis} />
           <SetupRecoveryInputs analysis={analysis} onChange={onChange} />
           <JCurveMetrics jStats={jStats} setupCost={analysis.setupCost} />
+          <ChurnToggle
+            churnAdjusted={churnAdjusted}
+            onToggle={setChurnAdjusted}
+            monthlyChurnPct={analysis.usagePricing.monthlyChurnPct}
+            cac={analysis.usagePricing.directCAC}
+          />
           <Card>
             <JCurveChart points={jCurvePoints} />
           </Card>
@@ -509,6 +519,53 @@ export function Analyzer({
         />
       </Card>
       </>
+      )}
+    </div>
+  );
+}
+
+function ChurnToggle({
+  churnAdjusted,
+  onToggle,
+  monthlyChurnPct,
+  cac,
+}: {
+  churnAdjusted: boolean;
+  onToggle: (v: boolean) => void;
+  monthlyChurnPct: number;
+  cac: number;
+}) {
+  const noCAC = churnAdjusted && cac === 0;
+  const noChurn = churnAdjusted && monthlyChurnPct === 0;
+  return (
+    <div className="flex flex-wrap items-center gap-3">
+      <label className="flex items-center gap-2 cursor-pointer select-none">
+        <div
+          onClick={() => onToggle(!churnAdjusted)}
+          className={`relative w-10 h-5 rounded-full transition-colors ${
+            churnAdjusted ? 'bg-indigo-600' : 'bg-slate-300 dark:bg-slate-600'
+          }`}
+        >
+          <span className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${churnAdjusted ? 'translate-x-5' : ''}`} />
+        </div>
+        <span className="text-sm text-slate-700 dark:text-slate-300">
+          Factor in churn & acquisition cost
+        </span>
+        {churnAdjusted && monthlyChurnPct > 0 && cac > 0 && (
+          <span className="text-xs text-slate-500 dark:text-slate-400 font-mono">
+            ({monthlyChurnPct}% churn · £{cac} CAC)
+          </span>
+        )}
+      </label>
+      {noCAC && (
+        <span className="text-xs bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 text-amber-700 dark:text-amber-300 rounded-md px-2 py-1">
+          Set a Direct CAC value to see acquisition cost impact
+        </span>
+      )}
+      {noChurn && !noCAC && (
+        <span className="text-xs bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 text-amber-700 dark:text-amber-300 rounded-md px-2 py-1">
+          Set a Monthly churn % to see churn impact
+        </span>
       )}
     </div>
   );

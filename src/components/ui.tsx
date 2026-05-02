@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import type { Health } from '../calculations';
 
 export function Tooltip({ text }: { text: string }) {
@@ -139,17 +139,39 @@ export function NumberInput({
   min?: number;
   step?: string | number;
 }) {
+  const safeValue = Number.isFinite(value) ? value : 0;
+  const [raw, setRaw] = useState(String(safeValue));
+  const focused = useRef(false);
+
+  useEffect(() => {
+    if (!focused.current) {
+      setRaw(String(Number.isFinite(value) ? value : 0));
+    }
+  }, [value]);
+
   return (
     <input
       type="number"
       className={inputClass}
-      value={Number.isFinite(value) ? value : 0}
+      value={raw}
       min={min}
       step={step}
       placeholder={placeholder}
+      onFocus={() => { focused.current = true; }}
       onChange={(e) => {
         const v = e.target.value;
-        onChange(v === '' ? 0 : parseFloat(v));
+        setRaw(v);
+        if (v !== '' && v !== '-') {
+          const n = parseFloat(v);
+          if (Number.isFinite(n)) onChange(n);
+        }
+      }}
+      onBlur={() => {
+        focused.current = false;
+        const n = parseFloat(raw);
+        const final = Number.isFinite(n) ? n : 0;
+        onChange(final);
+        setRaw(String(final));
       }}
     />
   );

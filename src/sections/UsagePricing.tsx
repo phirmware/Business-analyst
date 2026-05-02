@@ -877,18 +877,16 @@ function PercentileHelper({
       {/* Step 1 */}
       <div>
         <div className="text-sm font-medium mb-1">
-          Step 1 — Pick your best guess at the median (p50).
+          Step 1 — Uses your average {unitLabel}s per customer as the anchor.
         </div>
         <p className="text-xs text-slate-600 dark:text-slate-400">
-          What does one realistic, typical customer actually use in a month? Think of one persona,
-          not the whole market.{' '}
-          {u.p50Units > 0 ? (
+          The suggestions are calculated from your average usage figure, which you set in the inputs above.{' '}
+          {u.averageUnitsPerCustomer > 0 ? (
             <>
-              You currently have <strong>{formatNum(u.p50Units)}</strong> {unitLabel} entered as
-              your p50 — that&apos;s what the tool will use as the median.
+              Your average is currently <strong>{formatNum(u.averageUnitsPerCustomer)}</strong> {unitLabel}s/customer — the percentiles will spread out from there based on the shape you pick.
             </>
           ) : (
-            <>Enter a p50 value in the inputs above first.</>
+            <>Set an average {unitLabel}s per customer value in the inputs above first.</>
           )}
         </p>
       </div>
@@ -963,21 +961,22 @@ function PercentileHelper({
         <div className="text-sm font-medium mb-2">Step 3 — Auto-suggest percentiles.</div>
         <Button
           variant="secondary"
-          disabled={u.p50Units <= 0}
+          disabled={u.averageUnitsPerCustomer <= 0}
           onClick={() => {
-            if (u.p50Units <= 0) return;
+            if (u.averageUnitsPerCustomer <= 0) return;
             const m = SHAPE_MULTIPLIERS[helperShape];
+            const avg = u.averageUnitsPerCustomer;
             onSuggest({
-              p25Units: Math.round(u.p50Units * m.p25),
-              p75Units: Math.round(u.p50Units * m.p75),
-              p90Units: Math.round(u.p50Units * m.p90),
+              p25Units: Math.round(avg * m.p25),
+              p75Units: Math.round(avg * m.p75),
+              p90Units: Math.round(avg * m.p90),
             });
           }}
         >
-          Suggest percentiles based on my median
+          Suggest percentiles based on my average
         </Button>
-        {u.p50Units <= 0 && (
-          <p className="text-xs text-slate-400 mt-1">Enter a p50 value in the inputs above first.</p>
+        {u.averageUnitsPerCustomer <= 0 && (
+          <p className="text-xs text-slate-400 mt-1">Set an average {unitLabel}s per customer value in the inputs above first.</p>
         )}
         <p className="text-xs text-slate-500 dark:text-slate-400 mt-2">
           These are starting estimates. Replace them with real data if you have it.

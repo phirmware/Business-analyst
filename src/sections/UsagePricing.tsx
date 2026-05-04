@@ -130,6 +130,7 @@ export function UsagePricingInputs({
   const [showHelper, setShowHelper] = useState(false);
   const [showExample, setShowExample] = useState(false);
   const [helperShape, setHelperShape] = useState<UsageDistributionShape>('moderate');
+  const [costsCollapsed, setCostsCollapsed] = useState(true);
 
   const patchUsage = (patch: Partial<BusinessAnalysis['usagePricing']>) =>
     onChange((a) => ({ ...a, usagePricing: { ...a.usagePricing, ...patch } }));
@@ -158,57 +159,81 @@ export function UsagePricingInputs({
   return (
     <>
       {/* ── Consumption economics ─────────────────────────────────────── */}
-      <Card title="Consumption economics (per usage unit)">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <Field label="Consumption unit" tooltip={TOOLTIPS.consumptionUnitLabel}>
-            <TextInput
-              value={u.consumptionUnitLabel}
-              onChange={(v) => patchUsage({ consumptionUnitLabel: v })}
-              placeholder="API call / message / GB"
-            />
-          </Field>
-          <Field
-            label={`Price per ${u.consumptionUnitLabel || 'unit'} (£)`}
-            tooltip={TOOLTIPS.pricePerConsumptionUnit}
+      <Card
+        title="Consumption economics (per usage unit)"
+        right={
+          <button
+            type="button"
+            onClick={() => setCostsCollapsed((v) => !v)}
+            className="flex items-center gap-1.5 text-xs font-medium text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-300 transition-colors px-2 py-1 rounded-md hover:bg-indigo-50 dark:hover:bg-indigo-950/40"
+            aria-label={costsCollapsed ? 'Expand' : 'Collapse'}
           >
-            <NumberInput
-              value={u.pricePerConsumptionUnit}
-              onChange={(v) => patchUsage({ pricePerConsumptionUnit: v })}
-              step="0.0001"
-            />
-          </Field>
-          <Field label="Monthly base fee (£)" tooltip={TOOLTIPS.baseFee}>
-            <NumberInput
-              value={u.baseFee}
-              onChange={(v) => patchUsage({ baseFee: v })}
-            />
-          </Field>
-        </div>
-
-        <div className="mt-4">
-          <div className="flex items-center justify-between mb-2 gap-2 flex-wrap">
-            <div className="text-xs text-slate-500 dark:text-slate-400 flex items-center">
-              Variable cost per {u.consumptionUnitLabel || 'unit'}. Check "3rd-party" if cost depends on an upstream vendor.
-              <Tooltip text={TOOLTIPS.supplierDependency} />
+            {costsCollapsed ? 'Show' : 'Hide'}
+            <span className={`inline-block transition-transform duration-200 text-base leading-none ${costsCollapsed ? '' : 'rotate-180'}`}>
+              ↓
+            </span>
+          </button>
+        }
+      >
+        {!costsCollapsed && (
+          <>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <Field label="Consumption unit" tooltip={TOOLTIPS.consumptionUnitLabel}>
+                <TextInput
+                  value={u.consumptionUnitLabel}
+                  onChange={(v) => patchUsage({ consumptionUnitLabel: v })}
+                  placeholder="API call / message / GB"
+                />
+              </Field>
+              <Field
+                label={`Price per ${u.consumptionUnitLabel || 'unit'} (£)`}
+                tooltip={TOOLTIPS.pricePerConsumptionUnit}
+              >
+                <NumberInput
+                  value={u.pricePerConsumptionUnit}
+                  onChange={(v) => patchUsage({ pricePerConsumptionUnit: v })}
+                  step="0.0001"
+                />
+              </Field>
+              <Field label="Monthly base fee (£)" tooltip={TOOLTIPS.baseFee}>
+                <NumberInput
+                  value={u.baseFee}
+                  onChange={(v) => patchUsage({ baseFee: v })}
+                />
+              </Field>
             </div>
-            <Button variant="secondary" onClick={addConsumptionCost}>
-              + Add line
-            </Button>
+
+            <div className="mt-4">
+              <div className="flex items-center justify-between mb-2 gap-2 flex-wrap">
+                <div className="text-xs text-slate-500 dark:text-slate-400 flex items-center">
+                  Variable cost per {u.consumptionUnitLabel || 'unit'}. Check "3rd-party" if cost depends on an upstream vendor.
+                  <Tooltip text={TOOLTIPS.supplierDependency} />
+                </div>
+                <Button variant="secondary" onClick={addConsumptionCost}>
+                  + Add line
+                </Button>
+              </div>
+              <div className="space-y-2">
+                {u.consumptionVariableCosts.map((item) => (
+                  <ConsumptionCostRow
+                    key={item.id}
+                    item={item}
+                    onChange={(patch) => updateConsumptionCost(item.id, patch)}
+                    onRemove={() => removeConsumptionCost(item.id)}
+                  />
+                ))}
+                {u.consumptionVariableCosts.length === 0 && (
+                  <div className="text-sm text-slate-500">No consumption costs yet.</div>
+                )}
+              </div>
+            </div>
+          </>
+        )}
+        {costsCollapsed && (
+          <div className="text-xs text-slate-500 dark:text-slate-400">
+            £{u.pricePerConsumptionUnit}/unit · {u.consumptionVariableCosts.length} cost item{u.consumptionVariableCosts.length !== 1 ? 's' : ''} — click ▾ to expand
           </div>
-          <div className="space-y-2">
-            {u.consumptionVariableCosts.map((item) => (
-              <ConsumptionCostRow
-                key={item.id}
-                item={item}
-                onChange={(patch) => updateConsumptionCost(item.id, patch)}
-                onRemove={() => removeConsumptionCost(item.id)}
-              />
-            ))}
-            {u.consumptionVariableCosts.length === 0 && (
-              <div className="text-sm text-slate-500">No consumption costs yet.</div>
-            )}
-          </div>
-        </div>
+        )}
       </Card>
 
       {/* ── Customer behaviour ────────────────────────────────────────── */}

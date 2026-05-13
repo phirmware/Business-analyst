@@ -11,6 +11,7 @@ import {
 } from './storage';
 import { newAnalysis } from './constants';
 import { Analyzer } from './sections/Analyzer';
+import { CashFlow } from './sections/CashFlow';
 import { IdeaFilter } from './sections/IdeaFilter';
 import { StressTest } from './sections/StressTest';
 import { Scorecard } from './sections/Scorecard';
@@ -28,6 +29,7 @@ import { ImportDialog } from './components/ImportDialog';
 const SECTIONS: { key: Section; label: string; icon: string }[] = [
   { key: 'filter', label: 'Idea Filter', icon: '🧪' },
   { key: 'analyzer', label: 'Analyzer', icon: '📊' },
+  { key: 'cashflow', label: 'Cash Flow', icon: '💸' },
   { key: 'stress', label: 'Stress Test', icon: '🔥' },
   { key: 'scorecard', label: 'Scorecard', icon: '📝' },
   { key: 'distribute', label: 'Distribution', icon: '📣' },
@@ -325,6 +327,9 @@ export default function App() {
               onChange={updateActive}
               autoFocusName={shouldAutoFocusName}
             />
+          )}
+          {section === 'cashflow' && active && (
+            <CashFlow analysis={active} />
           )}
           {section === 'stress' && active && (
             <StressTest analysis={active} />

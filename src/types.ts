@@ -181,6 +181,7 @@ export interface AppSettings {
 export type Section =
   | 'filter'
   | 'analyzer'
+  | 'cashflow'
   | 'stress'
   | 'scorecard'
   | 'distribute'

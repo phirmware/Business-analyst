@@ -529,10 +529,10 @@ export function UsageUnitMetrics({ analysis }: { analysis: BusinessAnalysis }) {
 
       <Card title={`Contribution across customer percentiles (monthly, per ${unitLabel})`}>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          <PctBlock label="p25 (low)" units={u.p25Units} contribution={ue.p25Contribution} unitLabel={unitLabel} pricePerUnit={ue.pricePerConsumptionUnit} varCostPerUnit={ue.variableCostPerConsumptionUnit} />
-          <PctBlock label="p50 (median)" units={u.p50Units} contribution={ue.p50Contribution} unitLabel={unitLabel} pricePerUnit={ue.pricePerConsumptionUnit} varCostPerUnit={ue.variableCostPerConsumptionUnit} />
-          <PctBlock label="p75" units={u.p75Units} contribution={ue.p75Contribution} unitLabel={unitLabel} pricePerUnit={ue.pricePerConsumptionUnit} varCostPerUnit={ue.variableCostPerConsumptionUnit} />
-          <PctBlock label="p90 (whale)" units={u.p90Units} contribution={ue.p90Contribution} unitLabel={unitLabel} pricePerUnit={ue.pricePerConsumptionUnit} varCostPerUnit={ue.variableCostPerConsumptionUnit} />
+          <PctBlock label="p25 (low)" units={u.p25Units} contribution={ue.p25Contribution} unitLabel={unitLabel} pricePerUnit={ue.pricePerConsumptionUnit} varCostPerUnit={ue.variableCostPerConsumptionUnit} baseFee={ue.baseFee} />
+          <PctBlock label="p50 (median)" units={u.p50Units} contribution={ue.p50Contribution} unitLabel={unitLabel} pricePerUnit={ue.pricePerConsumptionUnit} varCostPerUnit={ue.variableCostPerConsumptionUnit} baseFee={ue.baseFee} />
+          <PctBlock label="p75" units={u.p75Units} contribution={ue.p75Contribution} unitLabel={unitLabel} pricePerUnit={ue.pricePerConsumptionUnit} varCostPerUnit={ue.variableCostPerConsumptionUnit} baseFee={ue.baseFee} />
+          <PctBlock label="p90 (whale)" units={u.p90Units} contribution={ue.p90Contribution} unitLabel={unitLabel} pricePerUnit={ue.pricePerConsumptionUnit} varCostPerUnit={ue.variableCostPerConsumptionUnit} baseFee={ue.baseFee} />
         </div>
         <p className="mt-3 text-xs text-slate-500 dark:text-slate-400">
           If p25 is negative and p90 is huge, you have a whale-and-mouse business — one churn event can collapse revenue.
@@ -566,7 +566,9 @@ export function UsageMonthlyMetrics({ analysis }: { analysis: BusinessAnalysis }
           value={formatGBP(ue.monthlyRevenue)}
           sub={
             <span className="font-mono text-xs">
-              {ue.payingCustomers} × {avgUnits}{unitLabel}s × £{price.toFixed(2)}
+              {ue.baseFee > 0
+                ? `${ue.payingCustomers} × (${avgUnits} ${unitLabel}s × £${price.toFixed(2)} + £${ue.baseFee.toFixed(2)} base)`
+                : `${ue.payingCustomers} × ${avgUnits} ${unitLabel}s × £${price.toFixed(2)}`}
             </span>
           }
         />
@@ -689,6 +691,7 @@ function PctBlock({
   unitLabel,
   pricePerUnit,
   varCostPerUnit,
+  baseFee,
 }: {
   label: string;
   units: number;
@@ -696,6 +699,7 @@ function PctBlock({
   unitLabel: string;
   pricePerUnit: number;
   varCostPerUnit: number;
+  baseFee: number;
 }) {
   const color =
     contribution > 0 ? 'text-healthy' : contribution === 0 ? 'text-caution' : 'text-danger';
@@ -710,6 +714,7 @@ function PctBlock({
       </div>
       <div className="text-xs font-mono text-slate-400 dark:text-slate-500 mt-1">
         {units} × (£{pricePerUnit.toFixed(2)} − £{varCostPerUnit.toFixed(2)})
+        {baseFee > 0 ? ` + £${baseFee.toFixed(2)} base` : ''}
       </div>
     </div>
   );

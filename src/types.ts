@@ -104,6 +104,10 @@ export interface EditHistoryEntry {
   notes: string;
 }
 
+// 'steady' = constant volume, no growth (e.g. an Airbnb booked ~N nights/month).
+// In this mode the J-curve follows the analysis's main monthly volume input
+// (unitsPerMonth / paying customers) via resolveRamp() — steadyCustomers is
+// only a stored fallback and is overwritten at calculation time.
 export type CustomerRampModel = 'steady' | 'linear' | 'custom';
 
 export interface SetupRecovery {

@@ -180,8 +180,11 @@ function buildFlowModel(analysis: BusinessAnalysis): FlowModel {
       customerVariableCost: u.avgVariableCostPerCustomer,
       customerContribution: u.avgContributionPerCustomer,
       revenueFormula:
-        `${formatNum(customerCount, 0)} customers × ${formatNum(averageUnits, 1)} ${label}/customer × ` +
-        `${formatGBP(u.pricePerConsumptionUnit)}${u.baseFee > 0 ? ` + ${formatGBP(u.baseFee)} base fee/customer` : ''}`,
+        u.baseFee > 0
+          ? `${formatNum(customerCount, 0)} customers × (${formatNum(averageUnits, 1)} ${label} × ` +
+            `${formatGBP(u.pricePerConsumptionUnit)} + ${formatGBP(u.baseFee)} base fee)`
+          : `${formatNum(customerCount, 0)} customers × ${formatNum(averageUnits, 1)} ${label}/customer × ` +
+            `${formatGBP(u.pricePerConsumptionUnit)}`,
       variableFormula:
         `${formatNum(customerCount, 0)} customers × ${formatNum(averageUnits, 1)} ${label}/customer × ` +
         `${formatGBP(u.variableCostPerConsumptionUnit)}`,

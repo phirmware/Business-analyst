@@ -131,7 +131,6 @@ export function summarizeAnalysisForChat(a: BusinessAnalysis): string {
     ``,
     `Computed:`,
     `- Contribution margin: £${ue.contributionPerUnit.toFixed(2)} (${ue.contributionMarginPct.toFixed(1)}%)`,
-    `- Gross margin: ${ue.grossMarginPct.toFixed(1)}%`,
     `- Breakeven: ${isFinite(ue.breakevenUnits) ? ue.breakevenUnits.toFixed(1) + ' units/mo' : 'unreachable (contribution <= 0)'}`,
     `- Monthly profit: £${ue.monthlyProfit.toFixed(0)}`,
     `- Annual profit: £${ue.annualProfit.toFixed(0)}`,

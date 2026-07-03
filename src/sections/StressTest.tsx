@@ -11,6 +11,7 @@ import {
   healthContribution,
   healthProfit,
   isUsageMode,
+  resolveRamp,
   type UsageVariances,
   type Variances,
   zeroUsageVariances,
@@ -74,12 +75,17 @@ const USAGE_SCENARIOS: UsageScenario[] = [
     apply: (a) => {
       const ue = calcUsageEconomics(a);
       const shareLost = ue.top10PctShare / 100;
+      const remainingCustomers = 0.9;
       const next = deepCopyAnalysis(a);
+      // The remaining 90% of customers keep (1 - shareLost) of total usage, so
+      // their average usage per customer is (1 - shareLost) / 0.9 of the old
+      // average. Multiplying by (1 - shareLost) alone would double-count the
+      // loss once customer count is also cut by 10%.
       next.usagePricing.averageUnitsPerCustomer = Math.max(
         0,
-        next.usagePricing.averageUnitsPerCustomer * (1 - shareLost)
+        (next.usagePricing.averageUnitsPerCustomer * (1 - shareLost)) / remainingCustomers
       );
-      next.unitsPerMonth = Math.max(0, next.unitsPerMonth * 0.9);
+      next.unitsPerMonth = Math.max(0, next.unitsPerMonth * remainingCustomers);
       return next;
     },
   },
@@ -127,7 +133,7 @@ const SCENARIOS: Scenario[] = [
   {
     key: 'skeptic',
     label: 'Skeptical investor',
-    description: 'Revenue -40%, costs +30%. The gold standard test.',
+    description: 'Price -40%, all costs +30%. The gold standard test.',
     variances: { revenuePct: -40, volumePct: 0, variablePct: 30, fixedPct: 30 },
   },
   {
@@ -145,13 +151,16 @@ const SCENARIOS: Scenario[] = [
   {
     key: 'bestGone',
     label: 'Best customer leaves',
-    description: '20% of revenue disappears permanently.',
-    variances: { revenuePct: -20, volumePct: 0, variablePct: 0, fixedPct: 0 },
+    // Customers leaving is a VOLUME loss, not a price cut: you also stop paying
+    // the per-unit costs on the units they took with them. Modelling it as a
+    // price drop overstated the damage.
+    description: '20% of your volume disappears permanently.',
+    variances: { revenuePct: 0, volumePct: -20, variablePct: 0, fixedPct: 0 },
   },
   {
     key: 'recession',
     label: 'Recession',
-    description: 'Revenue -30%, volume -25%.',
+    description: 'Price -30% and volume -25% at the same time.',
     variances: { revenuePct: -30, volumePct: -25, variablePct: 0, fixedPct: 0 },
   },
   {
@@ -540,7 +549,14 @@ export function StressTest({ analysis }: { analysis: BusinessAnalysis }) {
                     : (analysis.cashReserve + loss) / -r.monthlyProfit;
                 const vr = verdict(r.monthlyProfit, runway);
                 const health = healthContribution(r.contributionMarginPct);
-                const jPts = calcJCurve(r.contributionPerUnit, r.totalFixedCosts, analysis.setupCost, analysis.setupRecovery);
+                // In constant mode the ramp follows the (stressed) monthly volume,
+                // so volume scenarios genuinely slow down setup recovery.
+                const jPts = calcJCurve(
+                  r.contributionPerUnit,
+                  r.totalFixedCosts,
+                  analysis.setupCost,
+                  resolveRamp(analysis.setupRecovery, r.unitsPerMonth)
+                );
                 const jStats = getJCurveStats(jPts);
                 return (
                   <tr key={s.key} className="align-middle">
@@ -616,7 +632,12 @@ function UsageSurvivalMatrix({ analysis }: { analysis: BusinessAnalysis }) {
             {USAGE_SCENARIOS.map((s) => {
               const modified = s.apply(analysis);
               const ue = calcUsageEconomics(modified);
-              const jPts = calcJCurve(ue.avgContributionPerCustomer, ue.monthlyFixedCosts, analysis.setupCost, analysis.setupRecovery);
+              const jPts = calcJCurve(
+                ue.avgContributionPerCustomer,
+                ue.monthlyFixedCosts,
+                analysis.setupCost,
+                resolveRamp(analysis.setupRecovery, ue.payingCustomers)
+              );
               const jStats = getJCurveStats(jPts);
               const survives =
                 ue.monthlyProfit >= 0 && isFinite(ue.ltvToCacRatio) && ue.ltvToCacRatio >= 1.5;

@@ -53,7 +53,6 @@ ${fc || '(none)'}
 
 ## Results
 - **Contribution margin:** ${formatGBP(ue.contributionPerUnit)} (${formatPct(ue.contributionMarginPct)})
-- **Gross margin:** ${formatPct(ue.grossMarginPct)}
 - **Breakeven:** ${formatNum(ue.breakevenUnits, 1)} units/mo
 - **Monthly profit:** ${formatGBP(ue.monthlyProfit)}
 - **Annual profit:** ${formatGBP(ue.annualProfit)}

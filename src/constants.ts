@@ -457,7 +457,9 @@ export function newAnalysis(name = 'New business'): BusinessAnalysis {
     chat: [],
     notes: [],
     setupRecovery: {
-      rampModel: 'linear',
+      // 'steady' = constant, follows unitsPerMonth — the default keeps every
+      // section reading from the same number until the user opts into a ramp.
+      rampModel: 'steady',
       steadyCustomers: 50,
       linearStart: 10,
       linearEnd: 100,
@@ -482,9 +484,7 @@ export const TOOLTIPS: Record<string, string> = {
   cashReserve:
     'Cash in the bank that can absorb losses. Why it matters: runway = reserve / monthly loss. Rule of thumb: 6 months minimum. 12 months if the model is unproven.',
   contributionMargin:
-    'What is left from each sale after variable costs. This pays your fixed costs and eventually your profit. Rule of thumb: below 20% is dangerous for most businesses — a single bad month can wipe you out.',
-  grossMargin:
-    'Revenue minus variable costs, as a percent of revenue. Why it matters: it sets the ceiling on profitability. Rule of thumb: SaaS 70-90%, services 30-60%, physical goods 20-40%, commodities 5-15%.',
+    'What is left from each sale after variable costs — this pays your fixed costs and eventually your profit. (This is also your gross margin: in this model all per-unit costs are counted here, so the two are the same number.) Benchmarks: SaaS 70-90%, services 30-60%, physical goods 20-40%. Below 20% is dangerous for most businesses.',
   breakeven:
     'The number of units per month where revenue covers fixed costs. Below it you lose money. Rule of thumb: if your projected volume is less than 1.3x your breakeven, the business is fragile.',
   safetyMargin:

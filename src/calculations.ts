@@ -46,7 +46,6 @@ export interface UnitEconomics {
   variableCostPerUnit: number;
   contributionPerUnit: number;
   contributionMarginPct: number;
-  grossMarginPct: number;
   totalVariableCosts: number;
   totalFixedCosts: number;
   revenue: number;
@@ -93,8 +92,10 @@ export function calcUnitEconomics(
   const totalVar = variableCost * unitsPerMonth;
   const monthlyProfit = revenue - totalVar - fixed;
   const annualProfit = monthlyProfit * 12;
+  // Note: a separate "gross margin %" was removed — with a single price and a
+  // single per-unit variable cost, (revenue − totalVar) / revenue is exactly
+  // the same number as contribution / price. One number, one name.
   const contributionMarginPct = pricePerUnit > 0 ? (contribution / pricePerUnit) * 100 : 0;
-  const grossMarginPct = revenue > 0 ? ((revenue - totalVar) / revenue) * 100 : 0;
   const breakevenUnits = contribution > 0 ? fixed / contribution : Infinity;
   const safetyMarginPct =
     breakevenUnits > 0 && isFinite(breakevenUnits)
@@ -113,7 +114,6 @@ export function calcUnitEconomics(
     variableCostPerUnit: variableCost,
     contributionPerUnit: contribution,
     contributionMarginPct,
-    grossMarginPct,
     totalVariableCosts: totalVar,
     totalFixedCosts: fixed,
     revenue,
@@ -374,6 +374,18 @@ export function isUsageMode(a: BusinessAnalysis): boolean {
 
 const CUSTOM_RAMP_MONTHS = [1, 3, 6, 12, 24] as const;
 
+/**
+ * 'steady' means "constant — no growth curve" (e.g. a shortlet that simply gets
+ * booked N times a month). To keep one source of truth, constant mode follows
+ * the main monthly volume input (units sold / paying customers) instead of
+ * keeping its own separate number. Call this before handing a ramp to
+ * calcJCurve so the J-curve always agrees with the headline monthly numbers.
+ */
+export function resolveRamp(r: SetupRecovery, monthlyVolume: number): SetupRecovery {
+  if (r.rampModel !== 'steady') return r;
+  return { ...r, steadyCustomers: Math.max(0, monthlyVolume) };
+}
+
 export function getCustomersByMonth(r: SetupRecovery, month: number): number {
   if (r.rampModel === 'steady') return Math.max(0, r.steadyCustomers);
 
@@ -406,8 +418,11 @@ export function calcJCurve(
   maxMonths = 60,
   churnOpts?: { monthlyChurnPct: number; cac: number }
 ): JCurvePoint[] {
+  // Month 0 is "before launch": only the setup cost has left the bank.
+  // No trading yet, so monthly profit is 0 (it previously showed -fixed costs,
+  // which contradicted the cumulative line).
   const points: JCurvePoint[] = [
-    { month: 0, customers: 0, monthlyProfit: -fixedCostsPerMonth, cumulative: -(setupCost) },
+    { month: 0, customers: 0, monthlyProfit: 0, cumulative: -setupCost },
   ];
   let cumulative = -setupCost;
   let prevCustomers = 0;

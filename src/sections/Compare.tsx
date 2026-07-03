@@ -121,11 +121,6 @@ function ComparisonTable({
       rh: healthContribution(r.contributionMarginPct),
     },
     {
-      label: 'Gross margin',
-      lv: formatPct(l.grossMarginPct),
-      rv: formatPct(r.grossMarginPct),
-    },
-    {
       label: 'Breakeven / month',
       lv: formatNum(l.breakevenUnits, 1),
       rv: formatNum(r.breakevenUnits, 1),

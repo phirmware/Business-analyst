@@ -47,7 +47,9 @@ export const defaultSettings: AppSettings = {
 };
 
 const DEFAULT_SETUP_RECOVERY: SetupRecovery = {
-  rampModel: 'linear',
+  // 'steady' = constant, synced to the analysis's own monthly volume. For old
+  // saves that predate the ramp feature this matches their headline numbers.
+  rampModel: 'steady',
   steadyCustomers: 50,
   linearStart: 10,
   linearEnd: 100,

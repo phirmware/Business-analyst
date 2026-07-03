@@ -97,8 +97,8 @@ export function Scorecard({
             <div>{formatGBP(ue.contributionPerUnit)} ({formatPct(ue.contributionMarginPct)})</div>
           </div>
           <div>
-            <div className="text-xs uppercase text-slate-500">Gross margin</div>
-            <div>{formatPct(ue.grossMarginPct)}</div>
+            <div className="text-xs uppercase text-slate-500">Monthly profit</div>
+            <div>{formatGBP(ue.monthlyProfit)}</div>
           </div>
           <div>
             <div className="text-xs uppercase text-slate-500">Breakeven</div>

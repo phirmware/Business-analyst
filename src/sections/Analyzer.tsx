@@ -12,6 +12,7 @@ import {
   healthProfit,
   healthSafety,
   isUsageMode,
+  resolveRamp,
 } from '../calculations';
 import { INDUSTRIES, PRICING_MODE_OPTIONS, PRICING_MODELS, TOOLTIPS } from '../constants';
 import { UsagePricingInputs, UsageUnitMetrics, UsageMonthlyMetrics, UsageCustomerMetrics } from './UsagePricing';
@@ -73,7 +74,11 @@ export function Analyzer({
     const churnOpts = (churnAdjusted && usageMode)
       ? { monthlyChurnPct: analysis.usagePricing.monthlyChurnPct, cac: analysis.usagePricing.directCAC }
       : undefined;
-    return calcJCurve(contrib, fixed, analysis.setupCost, analysis.setupRecovery, 60, churnOpts);
+    // Constant (no-growth) mode follows the monthly volume entered above, so the
+    // J-curve always agrees with the headline monthly profit.
+    const monthlyVolume = usageMode ? (ue2?.payingCustomers ?? 0) : ue.unitsPerMonth;
+    const ramp = resolveRamp(analysis.setupRecovery, monthlyVolume);
+    return calcJCurve(contrib, fixed, analysis.setupCost, ramp, 60, churnOpts);
   }, [analysis, usageMode, ue, ue2, churnAdjusted]);
   const jStats = useMemo(() => getJCurveStats(jCurvePoints), [jCurvePoints]);
   const nameRef = useRef<HTMLInputElement | null>(null);
@@ -340,7 +345,10 @@ export function Analyzer({
         </div>
       </Card>
 
-      <SetupRecoveryInputs analysis={analysis} onChange={onChange} />
+      {/* Growth model for flat mode (usage mode renders it inside its own
+          "Customer growth & setup recovery" section below — rendering both
+          showed the same control twice) */}
+      {!usageMode && <SetupRecoveryInputs analysis={analysis} onChange={onChange} />}
 
       {/* Usage mode outputs — 3 grouped sections */}
       {usageMode && ue2 && (
@@ -439,14 +447,7 @@ export function Analyzer({
         </Card>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <Card>
-          <Metric
-            label="Gross margin"
-            value={formatPct(ue.grossMarginPct)}
-            tooltip={TOOLTIPS.grossMargin}
-          />
-        </Card>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <Card>
           <Metric
             label="Time to breakeven (setup)"

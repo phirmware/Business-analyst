@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import type { BusinessAnalysis, CustomerRampModel, SetupRecovery } from '../types';
+import { isUsageMode } from '../calculations';
 import { inputClass } from './ui';
 
 const CUSTOM_MONTHS = [1, 3, 6, 12, 24] as const;
@@ -13,6 +14,11 @@ export function SetupRecoveryInputs({
 }) {
   const [open, setOpen] = useState(false);
   const r = analysis.setupRecovery;
+  const usageMode = isUsageMode(analysis);
+  // Constant mode follows the main monthly volume input — one source of truth.
+  const constantVolume = Math.max(0, analysis.unitsPerMonth || 0);
+  const volumeLabel = usageMode ? 'paying customers' : (analysis.unitDefinition || 'unit') + 's';
+  const volumeInputName = usageMode ? '"Paying customers / month"' : '"Units sold per month"';
 
   const update = (patch: Partial<SetupRecovery>) =>
     onChange({ setupRecovery: { ...r, ...patch } });
@@ -31,13 +37,13 @@ export function SetupRecoveryInputs({
       >
         <div>
           <span className="text-sm font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
-            How fast will customers grow?
+            How does your monthly volume develop?
           </span>
           <span className="ml-2 text-xs text-slate-400">
             {r.rampModel === 'steady'
-              ? `Steady ${r.steadyCustomers} customers`
+              ? `Constant ${constantVolume} ${volumeLabel}/month (your monthly volume)`
               : r.rampModel === 'linear'
-              ? `${r.linearStart} → ${r.linearEnd} customers over 12 months`
+              ? `${r.linearStart} → ${r.linearEnd} over 12 months`
               : 'Custom ramp'}
           </span>
         </div>
@@ -47,15 +53,15 @@ export function SetupRecoveryInputs({
       {open && (
         <div className="px-5 pb-5 space-y-4 border-t border-slate-100 dark:border-slate-800 pt-4">
           <p className="text-xs text-slate-500 dark:text-slate-400">
-            Used to model how setup costs are recovered over time. Customers here means paying
-            customers (or units sold per month for flat pricing).
+            Used only to model how the setup cost is recovered over time (the J-curve below).
+            Volume here means {volumeLabel} per month.
           </p>
 
           {/* Model selector */}
           <div className="flex flex-wrap gap-3">
             {(
               [
-                { key: 'steady', label: 'Steady-state' },
+                { key: 'steady', label: 'Constant (no growth)' },
                 { key: 'linear', label: 'Linear ramp' },
                 { key: 'custom', label: 'Custom' },
               ] as { key: CustomerRampModel; label: string }[]
@@ -74,21 +80,21 @@ export function SetupRecoveryInputs({
             ))}
           </div>
 
-          {/* Steady-state */}
+          {/* Constant — reads the main monthly volume input, no separate number */}
           {r.rampModel === 'steady' && (
-            <div className="max-w-xs">
-              <label className="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1">
-                Paying customers (constant)
-              </label>
-              <input
-                type="number"
-                min={0}
-                className={inputClass}
-                value={r.steadyCustomers}
-                onChange={(e) => update({ steadyCustomers: Math.max(0, Number(e.target.value)) })}
-              />
-              <p className="text-xs text-slate-400 mt-1">
-                Assumes this many customers from day one — optimistic, useful as a quick estimate.
+            <div className="rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60 p-3 max-w-lg">
+              <div className="text-sm text-slate-700 dark:text-slate-200">
+                Uses your monthly volume from above:{' '}
+                <strong>
+                  {constantVolume} {volumeLabel}/month
+                </strong>
+                , the same every month.
+              </div>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-1.5">
+                Right for businesses without a growth curve — a shortlet that gets booked
+                roughly the same number of nights each month, a stall, a clinic at capacity.
+                There is one number to keep honest: {volumeInputName}. To see how bad months
+                hit it, use the Stress Test.
               </p>
             </div>
           )}
@@ -98,7 +104,7 @@ export function SetupRecoveryInputs({
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-sm">
               <div>
                 <label className="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1">
-                  Customers at month 1
+                  Volume at month 1
                 </label>
                 <input
                   type="number"
@@ -110,7 +116,7 @@ export function SetupRecoveryInputs({
               </div>
               <div>
                 <label className="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1">
-                  Customers at month 12
+                  Volume at month 12
                 </label>
                 <input
                   type="number"
@@ -121,7 +127,9 @@ export function SetupRecoveryInputs({
                 />
               </div>
               <p className="col-span-full text-xs text-slate-400">
-                Linearly interpolated month by month. Held constant after month 12.
+                Linearly interpolated month by month. Held constant after month 12. Note this is
+                separate from the monthly volume above — the headline metrics use that number,
+                the J-curve uses this ramp.
               </p>
             </div>
           )}
@@ -133,7 +141,7 @@ export function SetupRecoveryInputs({
                 <thead>
                   <tr className="text-xs text-slate-500 dark:text-slate-400">
                     <th className="text-left pr-6 pb-1 font-medium">Month</th>
-                    <th className="text-left pb-1 font-medium">Paying customers</th>
+                    <th className="text-left pb-1 font-medium">Volume ({volumeLabel})</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
